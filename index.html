@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>強震動 家具挙動シミュレーター</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
+<style>
+:root{
+  --bg:#0e1116; --panel:#161c25; --panel2:#1d2530; --line:#2a3442;
+  --tx:#d7dee8; --dim:#8593a5;
+  --acc:#ff5c49; --vel:#2dd4bf; --dsp:#f5b942;
+  --ns:#5aa2ff; --ew:#3ddc97; --ud:#aab4c4;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--tx);
+  font-family:"Hiragino Kaku Gothic ProN","Yu Gothic",system-ui,sans-serif;font-size:13px}
+#view{position:absolute;inset:0}
+canvas{display:block}
+.mono{font-family:ui-monospace,"SF Mono",Consolas,monospace}
+
+/* ---- left control panel ---- */
+#panel{position:absolute;left:0;top:0;bottom:0;width:252px;background:var(--panel);
+  border-right:1px solid var(--line);padding:12px;overflow-y:auto;z-index:10}
+#panel h1{font-size:14px;letter-spacing:.08em;margin-bottom:2px}
+#panel .sub{color:var(--dim);font-size:10px;margin-bottom:10px}
+.sec{border-top:1px solid var(--line);padding:10px 0}
+.sec h2{font-size:11px;color:var(--dim);letter-spacing:.12em;margin-bottom:8px}
+button{background:var(--panel2);color:var(--tx);border:1px solid var(--line);
+  border-radius:4px;padding:6px 10px;cursor:pointer;font-size:12px}
+button:hover:not(:disabled){border-color:#4a5a70}
+button:disabled{opacity:.35;cursor:default}
+button.primary{background:#2b4a6f;border-color:#3d6491}
+button.primary:hover:not(:disabled){background:#33587f}
+.row{display:flex;gap:6px;align-items:center;margin:6px 0;flex-wrap:wrap}
+.grow{flex:1}
+label.chk{display:flex;align-items:center;gap:7px;padding:4px 2px;cursor:pointer}
+label.chk input{accent-color:#5aa2ff}
+label.chk .spec{margin-left:auto;color:var(--dim);font-size:10px}
+.cfg{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--dim);
+  padding:0 2px 6px 26px}
+.cfg input{width:3.6em;padding:2px 4px;font-size:11px}
+input[type=range]{width:100%}
+select,input[type=number]{background:var(--panel2);color:var(--tx);border:1px solid var(--line);
+  border-radius:4px;padding:4px 6px;font-size:12px}
+#fileName{font-size:10px;color:var(--dim);word-break:break-all;margin-top:4px}
+#recInfo{font-size:11px;line-height:1.7;color:var(--tx)}
+#recInfo b{color:var(--dim);font-weight:normal;display:inline-block;width:5.5em}
+.peak{display:flex;justify-content:space-between;font-size:12px;margin:2px 0}
+.peak .v{font-family:ui-monospace,Consolas,monospace}
+.peak.pa .v{color:var(--acc)} .peak.pv .v{color:var(--vel)} .peak.pd .v{color:var(--dsp)}
+#status{font-size:11px;line-height:1.8}
+#status .item{display:flex;justify-content:space-between}
+#status .fall{color:var(--acc)} #status .slide{color:var(--dsp)} #status .ok{color:var(--dim)}
+#timeRead{font-size:18px;text-align:center;margin:4px 0;letter-spacing:.05em}
+
+/* ---- waveform drawer (right edge) ---- */
+#waveDrawer{position:absolute;right:0;top:0;bottom:0;width:340px;background:rgba(14,17,22,.92);
+  border-left:1px solid var(--line);z-index:10;display:flex;flex-direction:column;
+  transition:transform .25s ease;padding:10px}
+#waveDrawer.hidden{transform:translateX(100%)}
+#waveDrawer h2{font-size:11px;color:var(--dim);letter-spacing:.12em;margin-bottom:6px}
+.chart{flex:1;display:flex;flex-direction:column;min-height:0;margin-bottom:8px}
+.chart .hd{display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px}
+.chart canvas{flex:1;width:100%;background:#10151c;border:1px solid var(--line);border-radius:3px}
+#legend{display:flex;gap:12px;font-size:10px;color:var(--dim);margin-bottom:6px}
+#legend i{display:inline-block;width:10px;height:2px;vertical-align:middle;margin-right:4px}
+#waveToggle{position:absolute;top:10px;right:10px;z-index:11}
+#waveToggle.shift{right:350px}
+#msg{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);z-index:12;
+  background:var(--panel2);border:1px solid var(--line);border-radius:4px;padding:6px 14px;
+  font-size:12px;display:none}
+</style>
+</head>
+<body>
+<div id="view"></div>
+
+<div id="panel">
+  <h1>強震動 家具挙動シミュレーター</h1>
+  <div class="sub">K-NET / KiK-net CSV → 変位波形 → 振動台加振</div>
+
+  <div class="sec">
+    <h2>波形ファイル</h2>
+    <div class="row">
+      <button class="primary grow" id="btnFile">CSVを読み込む</button>
+      <input type="file" id="fileInput" accept=".csv,text/csv" style="display:none">
+    </div>
+    <div id="fileName">未読込</div>
+    <div id="recInfo"></div>
+    <div id="peaks" style="margin-top:6px"></div>
+  </div>
+
+  <div class="sec">
+    <h2>家具の選択（複数可）</h2>
+    <div id="furnList"></div>
+    <div class="row"><button class="grow" id="btnPlace">室内に配置（リセット）</button></div>
+  </div>
+
+  <div class="sec">
+    <h2>加振</h2>
+    <div id="timeRead" class="mono">0.0 s</div>
+    <div class="row">
+      <button class="primary grow" id="btnRun" disabled>加振開始</button>
+      <button id="btnStop" disabled>停止</button>
+    </div>
+    <div class="row">
+      <span style="width:5em">再生速度</span>
+      <select id="speed" class="grow">
+        <option value="0.25">0.25×</option><option value="0.5">0.5×</option>
+        <option value="1" selected>1.0×</option><option value="2">2.0×</option>
+      </select>
+    </div>
+    <div class="row">
+      <span style="width:5em">開始時刻</span>
+      <input type="number" id="startSkip" class="grow" value="10" min="0" step="1"> <span>s</span>
+    </div>
+    <div class="row">
+      <span style="width:5em">振幅倍率</span>
+      <input type="number" id="ampScale" class="grow" value="1.0" min="0.1" max="3" step="0.1">
+    </div>
+  </div>
+
+  <div class="sec">
+    <h2>家具の状態</h2>
+    <div id="status"><span class="ok">— 未配置 —</span></div>
+  </div>
+</div>
+
+<button id="waveToggle" class="shift">波形 表示/非表示</button>
+
+<div id="waveDrawer">
+  <div id="legend">
+    <span><i style="background:var(--ns)"></i>NS</span>
+    <span><i style="background:var(--ew)"></i>EW</span>
+    <span><i style="background:var(--ud)"></i>UD</span>
+  </div>
+  <div class="chart"><div class="hd"><span style="color:var(--acc)">加速度 (gal)</span><span class="mono" id="pkA"></span></div><canvas id="cA"></canvas></div>
+  <div class="chart"><div class="hd"><span style="color:var(--vel)">速度 (cm/s)</span><span class="mono" id="pkV"></span></div><canvas id="cV"></canvas></div>
+  <div class="chart"><div class="hd"><span style="color:var(--dsp)">変位 (cm)</span><span class="mono" id="pkD"></span></div><canvas id="cD"></canvas></div>
+</div>
+
+<div id="msg"></div>
+
+<script>
+"use strict";
+/* =====================================================================
+ * 1. K-NET / KiK-net CSV parser
+ * ===================================================================== */
+function parseKnetCsv(text){
+  const lines = text.split(/\r?\n/);
+  const rec = {header:{}, nch:0, dt:0.01, acc:null, n:0, kik:false};
+  const data = [];
+  let originLine=null, stationLine=null, freqNext=false, durNext=false;
+  for(let i=0;i<lines.length;i++){
+    const L=lines[i];
+    if(!L) continue;
+    if(L[0]==='#'){
+      const body=L.slice(1).trim();
+      if(freqNext){ rec.header.fs=parseFloat(body); rec.dt=1/rec.header.fs; freqNext=false; continue; }
+      if(durNext){ rec.header.dur=parseFloat(body); durNext=false; continue; }
+      if(/^SamplingFrequency/i.test(body)){ freqNext=true; continue; }
+      if(/^DurationTime/i.test(body)){ durNext=true; continue; }
+      if(/^\d{4}\//.test(body)){ // origin time line
+        const p=body.split(',');
+        if(p.length>=5 && !originLine){ originLine=p;
+          rec.header.origin=p[0]; rec.header.mag=p[4]; rec.header.depth=p[3];
+        }
+        continue;
+      }
+      if(/^[A-Z]{3}[A-Z0-9]+,/.test(body) && !stationLine){
+        const p=body.split(',');
+        stationLine=p; rec.header.code=p[0];
+        rec.kik = p.length>=5; // Height1,Height2
+        continue;
+      }
+      continue;
+    }
+    // data line: Time,Rel,ch...
+    const p=L.split(',');
+    if(p.length<5) continue;
+    const vals=new Array(p.length-2);
+    for(let k=2;k<p.length;k++) vals[k-2]=parseFloat(p[k]);
+    data.push(vals);
+  }
+  if(data.length<10) throw new Error("波形データ行が見つかりません");
+  const nchRaw=data[0].length;
+  rec.kik = rec.kik || nchRaw===6;
+  // K-NET: 3ch (NS,EW,UD surface). KiK-net: 6ch → surface = ch4-6
+  const off = (nchRaw===6)?3:0;
+  rec.nch=3; rec.n=data.length;
+  const ns=new Float64Array(rec.n), ew=new Float64Array(rec.n), ud=new Float64Array(rec.n);
+  for(let i=0;i<rec.n;i++){ ns[i]=data[i][off]; ew[i]=data[i][off+1]; ud[i]=data[i][off+2]; }
+  rec.acc=[ns,ew,ud];
+  rec.header.type = (nchRaw===6)?"KiK-net（地表成分 ch4-6 使用）":"K-NET（地表3成分）";
+  rec.fmt="knet";
+  return rec;
+}
+
+/* 気象庁強震観測フォーマット（Shift-JIS, NS/EW/UD, 北・東・上が正） */
+function parseJmaCsv(text){
+  const lines=text.split(/\r?\n/).filter(l=>l.trim().length);
+  const rec={header:{},dt:0.01,acc:null,n:0};
+  let di=-1;
+  for(let i=0;i<Math.min(lines.length,12);i++){
+    const L=lines[i];
+    if(i===0)rec.header.code=(L.split(',')[0]||'').replace(/SITE\s*CODE\s*=?/i,'').trim();
+    let m=L.match(/SAMPLING\s*RATE\s*=?\s*([\d.]+)/i);
+    if(m)rec.header.fs=parseFloat(m[1]);
+    m=L.match(/INITIAL\s*TIME\s*=?\s*([\d][\d ]+)/i);
+    if(m)rec.header.origin=m[1].trim();
+    const cells=L.split(',').map(s=>s.trim()).filter(s=>s.length);
+    if(cells.length>=3&&cells.every(c=>/^(NS|EW|UD|N-S|E-W|U-D)$/i.test(c))){di=i+1;break;}
+  }
+  if(di<0){ // 仕様通りの並び: 1:コード 2:緯度 3:経度 4:fs 5:単位 6:開始時刻 7:成分名
+    rec.header.code=lines[0].split(',')[0].trim();
+    const v=parseFloat(lines[3]); if(v>0)rec.header.fs=v;
+    rec.header.origin=(lines[5]||'').trim();
+    di=7;
+  }
+  if(!rec.header.fs)rec.header.fs=100;
+  rec.dt=1/rec.header.fs;
+  const ns=[],ew=[],ud=[];
+  for(let i=di;i<lines.length;i++){
+    const p=lines[i].split(',');
+    const a=parseFloat(p[0]),b=parseFloat(p[1]),c=parseFloat(p[2]);
+    if(isNaN(a)||isNaN(b)||isNaN(c))continue;
+    ns.push(a);ew.push(b);ud.push(c);
+  }
+  rec.n=ns.length;
+  if(rec.n<10)throw new Error("波形データ行が見つかりません");
+  rec.acc=[Float64Array.from(ns),Float64Array.from(ew),Float64Array.from(ud)];
+  rec.header.type="気象庁強震観測（NS,EW,UD）";
+  rec.fmt="jma";
+  return rec;
+}
+function parseAnyCsv(text){
+  const t=text.replace(/^\uFEFF/,'');
+  return /^#K-NET/m.test(t.slice(0,300))?parseKnetCsv(t):parseJmaCsv(t);
+}
+
+/* =====================================================================
+ * 2. DSP — Butterworth HPF (斎藤1978 漸化式フィルタ設計準拠) + 台形積分
+ *    fp=0.1Hz, fs=0.05Hz, Ap=0.1dB, As=10dB
+ * ===================================================================== */
+function designHpf(fsamp){
+  const Ap=0.1, As=10.0, fp=0.1, fstop=0.05;
+  const wp=Math.tan(Math.PI*fp/fsamp), ws=Math.tan(Math.PI*fstop/fsamp);
+  const n=Math.ceil(Math.log10((Math.pow(10,As/10)-1)/(Math.pow(10,Ap/10)-1)) /
+                    (2*Math.log10(wp/ws)));
+  const eps=Math.sqrt(Math.pow(10,Ap/10)-1);
+  const wc=wp*Math.pow(eps,1/n); // prewarped analog cutoff (HPF)
+  const secs=[];
+  for(let k=0;k<Math.floor(n/2);k++){
+    const a1=2*Math.sin((2*k+1)*Math.PI/(2*n));
+    const A=1+a1*wc+wc*wc, B=2*(wc*wc-1), C=1-a1*wc+wc*wc;
+    secs.push({b:[1/A,-2/A,1/A], a:[B/A,C/A]});
+  }
+  if(n%2){
+    const A=1+wc;
+    secs.push({b:[1/A,-1/A,0], a:[(wc-1)/A,0]});
+  }
+  return secs;
+}
+function applyFilter(x,secs){
+  let y=Float64Array.from(x);
+  for(const s of secs){
+    const out=new Float64Array(y.length);
+    let x1=0,x2=0,y1=0,y2=0;
+    const b0=s.b[0],b1=s.b[1],b2=s.b[2],a1=s.a[0],a2=s.a[1];
+    for(let i=0;i<y.length;i++){
+      const xi=y[i];
+      const yi=b0*xi+b1*x1+b2*x2-a1*y1-a2*y2;
+      x2=x1;x1=xi;y2=y1;y1=yi;out[i]=yi;
+    }
+    y=out;
+  }
+  return y;
+}
+function cumTrapz(x,dt){
+  const y=new Float64Array(x.length);
+  for(let i=1;i<x.length;i++) y[i]=y[i-1]+(x[i]+x[i-1])*0.5*dt;
+  return y;
+}
+/* 気象庁 積分漸化式（斉藤1978による係数設計）
+   速度: カットオフ5秒 3次Butterworth積分 / 変位: 1倍強震計(T0=6s,h=0.55)特性再現 */
+function jmaVel(a){
+  const G=0.004937561699,
+        A1=-2.974867761716, A2=2.950050339269, A3=-0.975180618018;
+  const v=new Float64Array(a.length);
+  for(let t=0;t<a.length;t++){
+    const a1=t>0?a[t-1]:0, a2=t>1?a[t-2]:0, a3=t>2?a[t-3]:0;
+    const v1=t>0?v[t-1]:0, v2=t>1?v[t-2]:0, v3=t>2?v[t-3]:0;
+    v[t]=G*(a[t]-a1-a2+a3)-(A1*v1+A2*v2+A3*v3);
+  }
+  return v;
+}
+function jmaDisp(a){
+  const H=1.0,
+        C1=-1.988438073558305, C2=0.9885471048650272,
+        D0=0.00002485615736514583, D1=0.00004971231473029166, D2=0.00002485615736514583;
+  const d=new Float64Array(a.length);
+  for(let t=0;t<a.length;t++){
+    const a1=t>0?a[t-1]:0, a2=t>1?a[t-2]:0;
+    const d1=t>0?d[t-1]:0, d2=t>1?d[t-2]:0;
+    d[t]=H*(D0*a[t]+D1*a1+D2*a2)-(C1*d1+C2*d2);
+  }
+  return d;
+}
+function resampleLinear(x,dtIn,dtOut){
+  const n=Math.floor((x.length-1)*dtIn/dtOut)+1;
+  const y=new Float64Array(n);
+  for(let i=0;i<n;i++){
+    const t=i*dtOut/dtIn, i0=Math.min(Math.floor(t),x.length-2), f=t-i0;
+    y[i]=x[i0]*(1-f)+x[i0+1]*f;
+  }
+  return y;
+}
+function processRecord(rec){
+  const fs=rec.header.fs||100;
+  let dt=rec.dt;
+  const acc=[],vel=[],dsp=[];
+  const secs=rec.fmt==="jma"?null:designHpf(fs);
+  if(rec.fmt==="jma"&&Math.abs(fs-100)>1e-6){ // 漸化式係数は100Hz設計 → 100Hzへ再標本化
+    rec.acc=rec.acc.map(a=>resampleLinear(a,dt,0.01));
+    dt=0.01;
+  }
+  for(let c=0;c<3;c++){
+    const raw=rec.acc[c];
+    let m=0; for(let i=0;i<raw.length;i++)m+=raw[i]; m/=raw.length;
+    const a0=new Float64Array(raw.length);
+    for(let i=0;i<raw.length;i++)a0[i]=raw[i]-m;      // オフセット(平均)除去
+    if(rec.fmt==="jma"){
+      acc.push(a0);
+      vel.push(jmaVel(a0));                            // 積分漸化式 (cm/s)
+      dsp.push(jmaDisp(a0));                           // 積分漸化式 (cm)
+    }else{
+      const a=applyFilter(a0,secs);                    // HPF
+      const v=applyFilter(cumTrapz(a,dt),secs);        // 積分→HPF (cm/s)
+      const d=applyFilter(cumTrapz(v,dt),secs);        // 積分→HPF (cm)
+      acc.push(a);vel.push(v);dsp.push(d);
+    }
+  }
+  const n=acc[0].length;
+  let pga=0,pgv=0,pgd=0;
+  for(let i=0;i<n;i++){
+    const A=Math.hypot(acc[0][i],acc[1][i],acc[2][i]);
+    const V=Math.hypot(vel[0][i],vel[1][i],vel[2][i]);
+    const D=Math.hypot(dsp[0][i],dsp[1][i],dsp[2][i]);
+    if(A>pga)pga=A; if(V>pgv)pgv=V; if(D>pgd)pgd=D;
+  }
+  return {acc,vel,dsp,n,dt,pga,pgv,pgd,dur:(n-1)*dt};
+}
+
+/* =====================================================================
+ * 3. 家具カタログ（現実的な寸法・質量・摩擦）
+ * ===================================================================== */
+const FURN = [
+ {id:"bookshelf", name:"本棚（背高）",  kind:"box", w:0.90,d:0.30,h:1.80, mass:70, mu:0.30, color:0x8a5a33, pos:[-1.5,-1.55], face:0},
+ {id:"chest",     name:"衣装棚（背低）", kind:"box", w:0.90,d:0.45,h:0.90, mass:45, mu:0.35, color:0xa9825a, pos:[-0.2,-1.50], face:0},
+ {id:"desk",      name:"机",           kind:"desk", w:1.20,d:0.70,h:0.72, mass:25, mu:0.45, color:0x9c8a6e, pos:[1.2,-1.55], face:0},
+ {id:"chair",     name:"椅子",         kind:"chair", w:0.42,d:0.42,h:0.82, seatH:0.44, mass:5, mu:0.40, color:0x5a6b7d, pos:[1.2,-0.7], face:0},
+ {id:"bed",       name:"ベッド",       kind:"bed", w:1.95,d:0.97,h:0.45, headH:0.85, mass:35, mu:0.40, color:0x6e4f33, pos:[1.35,0.9], face:1},
+ {id:"fridge",    name:"冷蔵庫",       kind:"box", w:0.65,d:0.70,h:1.80, mass:90, mu:0.25, color:0xc4ccd4, pos:[-1.55,0.9], face:1},
+ {id:"lamp",      name:"吊り照明（天井から）", kind:"lamp", lamp:true, mass:1.5, cord:1.2, color:0xf5e3a0, pos:[0.3,0.1]},
+];
+
+/* =====================================================================
+ * 4. Three.js scene + Cannon.js world
+ * ===================================================================== */
+const ROOM_W=4.2, ROOM_D=4.2, ROOM_H=2.4, WALL_T=0.08;
+let renderer,scene,camera,world,roomBody,roomGroup;
+let furniture=[]; // {def,body,mesh,startPos,fallen,slid, lampLine?, anchorLocal?}
+let proc=null;    // processed waveforms
+let simT=0, running=false, physT=0;
+const PHYS_DT=1/240;
+
+function initGL(){
+  renderer=new THREE.WebGLRenderer({antialias:true});
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  renderer.shadowMap.enabled=true;
+  renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+  document.getElementById("view").appendChild(renderer.domElement);
+  scene=new THREE.Scene();
+  scene.background=new THREE.Color(0x0e1116);
+  scene.fog=new THREE.Fog(0x0e1116,10,26);
+  camera=new THREE.PerspectiveCamera(50,1,0.1,100);
+
+  const amb=new THREE.HemisphereLight(0xbcc7d6,0x20242c,0.75); scene.add(amb);
+  const sun=new THREE.DirectionalLight(0xffffff,0.9);
+  sun.position.set(5,8,4); sun.castShadow=true;
+  sun.shadow.mapSize.set(2048,2048);
+  sun.shadow.camera.left=-6;sun.shadow.camera.right=6;
+  sun.shadow.camera.top=6;sun.shadow.camera.bottom=-6;
+  scene.add(sun);
+
+  // ground grid (lab floor, fixed frame)
+  const grid=new THREE.GridHelper(30,30,0x2a3442,0x1a212b);
+  grid.position.y=-0.35; scene.add(grid);
+
+  onResize(); addEventListener("resize",onResize);
+  initOrbit();
+}
+function onResize(){
+  const w=innerWidth,h=innerHeight;
+  renderer.setSize(w,h);
+  camera.aspect=w/h; camera.updateProjectionMatrix();
+  sizeCharts();
+  staticCache=null;
+  if(proc)drawChartsBase();
+}
+
+/* simple orbit control */
+let camTheta=0.8, camPhi=1.15, camDist=8.2, camTarget=new THREE.Vector3(0,1.0,0);
+function updateCam(){
+  camera.position.set(
+    camTarget.x+camDist*Math.sin(camPhi)*Math.cos(camTheta),
+    camTarget.y+camDist*Math.cos(camPhi),
+    camTarget.z+camDist*Math.sin(camPhi)*Math.sin(camTheta));
+  camera.lookAt(camTarget);
+}
+function initOrbit(){
+  const el=renderer.domElement; let drag=false,px=0,py=0;
+  el.addEventListener("pointerdown",e=>{drag=true;px=e.clientX;py=e.clientY;});
+  addEventListener("pointerup",()=>drag=false);
+  addEventListener("pointermove",e=>{
+    if(!drag)return;
+    camTheta+=(e.clientX-px)*0.006; camPhi-=(e.clientY-py)*0.006;
+    camPhi=Math.max(0.15,Math.min(1.55,camPhi));
+    px=e.clientX;py=e.clientY; updateCam();
+  });
+  el.addEventListener("wheel",e=>{
+    camDist=Math.max(3,Math.min(20,camDist+e.deltaY*0.005)); updateCam();
+  },{passive:true});
+  updateCam();
+}
+
+function initPhysics(){
+  world=new CANNON.World();
+  world.gravity.set(0,-9.81,0);
+  world.broadphase=new CANNON.SAPBroadphase(world);
+  world.solver.iterations=40;
+  world.defaultContactMaterial.contactEquationStiffness=1e8;
+  world.defaultContactMaterial.contactEquationRelaxation=3;
+  world.defaultContactMaterial.frictionEquationStiffness=1e8;
+  buildRoom();
+}
+
+const floorMat=new CANNON.Material("floor");
+function buildRoom(){
+  // kinematic body: floor slab + 4 walls（部屋全体が振動台として一体で動く）
+  roomBody=new CANNON.Body({mass:0,type:CANNON.Body.KINEMATIC,material:floorMat});
+  roomBody.addShape(new CANNON.Box(new CANNON.Vec3(ROOM_W/2,0.175,ROOM_D/2)),
+                    new CANNON.Vec3(0,-0.175,0));
+  const wh=ROOM_H/2;
+  roomBody.addShape(new CANNON.Box(new CANNON.Vec3(ROOM_W/2,wh,WALL_T/2)),
+                    new CANNON.Vec3(0,wh,-ROOM_D/2-WALL_T/2));
+  roomBody.addShape(new CANNON.Box(new CANNON.Vec3(ROOM_W/2,wh,WALL_T/2)),
+                    new CANNON.Vec3(0,wh, ROOM_D/2+WALL_T/2));
+  roomBody.addShape(new CANNON.Box(new CANNON.Vec3(WALL_T/2,wh,ROOM_D/2)),
+                    new CANNON.Vec3(-ROOM_W/2-WALL_T/2,wh,0));
+  roomBody.addShape(new CANNON.Box(new CANNON.Vec3(WALL_T/2,wh,ROOM_D/2)),
+                    new CANNON.Vec3( ROOM_W/2+WALL_T/2,wh,0));
+  world.addBody(roomBody);
+
+  roomGroup=new THREE.Group(); scene.add(roomGroup);
+  // floor
+  const fl=new THREE.Mesh(new THREE.BoxGeometry(ROOM_W,0.35,ROOM_D),
+    new THREE.MeshStandardMaterial({color:0x6b7686,roughness:0.9}));
+  fl.position.y=-0.175; fl.receiveShadow=true; roomGroup.add(fl);
+  // tatami-ish floor top
+  const top=new THREE.Mesh(new THREE.PlaneGeometry(ROOM_W,ROOM_D),
+    new THREE.MeshStandardMaterial({color:0xb9a988,roughness:0.95}));
+  top.rotation.x=-Math.PI/2; top.position.y=0.001; top.receiveShadow=true; roomGroup.add(top);
+  // walls (semi-transparent, north & west visible)
+  const wallMat=new THREE.MeshStandardMaterial({color:0xdfe6ee,transparent:true,opacity:0.28,side:THREE.DoubleSide});
+  const wN=new THREE.Mesh(new THREE.PlaneGeometry(ROOM_W,ROOM_H),wallMat);
+  wN.position.set(0,ROOM_H/2,-ROOM_D/2); roomGroup.add(wN);
+  const wW=new THREE.Mesh(new THREE.PlaneGeometry(ROOM_D,ROOM_H),wallMat);
+  wW.rotation.y=Math.PI/2; wW.position.set(-ROOM_W/2,ROOM_H/2,0); roomGroup.add(wW);
+  // ceiling edge frame
+  const frame=new THREE.LineSegments(
+    new THREE.EdgesGeometry(new THREE.BoxGeometry(ROOM_W,ROOM_H,ROOM_D)),
+    new THREE.LineBasicMaterial({color:0x4a5a70}));
+  frame.position.y=ROOM_H/2; roomGroup.add(frame);
+  // N arrow marker
+  const arrow=new THREE.ArrowHelper(new THREE.Vector3(0,0,-1),new THREE.Vector3(ROOM_W/2+0.5,0.02,0),0.7,0x5aa2ff,0.2,0.12);
+  roomGroup.add(arrow);
+}
+
+/* ---- furniture builders ---- */
+let roomOffset={px:0,py:0,pz:0,vx:0,vy:0,vz:0};
+function stdMat(color,rough){return new THREE.MeshStandardMaterial({color,roughness:rough??0.8});}
+function edged(mesh){
+  mesh.castShadow=true;mesh.receiveShadow=true;
+  const g=new THREE.Group();g.add(mesh);
+  g.add(new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry),
+    new THREE.LineBasicMaterial({color:0x11151a})));
+  g.position.copy(mesh.position);mesh.position.set(0,0,0);
+  return g;
+}
+function newBody(def,centerY,mass){
+  const mat=new CANNON.Material(def.id);
+  world.addContactMaterial(new CANNON.ContactMaterial(floorMat,mat,
+    {friction:def.mu,restitution:0.15,frictionEquationStiffness:1e8,frictionEquationRelaxation:3}));
+  const body=new CANNON.Body({mass:mass??def.mass,material:mat});
+  body.position.set(def.pos[0]+roomOffset.px,centerY+0.002+roomOffset.py,def.pos[1]+roomOffset.pz);
+  if(def.face)body.quaternion.setFromAxisAngle(new CANNON.Vec3(0,1,0),Math.PI/2);
+  body.velocity.set(roomOffset.vx,roomOffset.vy,roomOffset.vz);
+  body.linearDamping=0.01;body.angularDamping=0.01;body.allowSleep=false;
+  return body;
+}
+function finishFurn(def,body,g){
+  world.addBody(body);scene.add(g);
+  return {def,body,mesh:g,
+    startPos:new CANNON.Vec3(def.pos[0],body.position.y-roomOffset.py,def.pos[1]),
+    fallen:false,slid:false};
+}
+
+function makeBoxFurn(def){
+  const {mass,cogY}=furnCfg(def), cY=cogY;
+  const body=newBody(def,cY,mass);
+  body.addShape(new CANNON.Box(new CANNON.Vec3(def.w/2,def.h/2,def.d/2)),
+                new CANNON.Vec3(0,def.h/2-cY,0));
+  const g=new THREE.Group();
+  const main=new THREE.Mesh(new THREE.BoxGeometry(def.w,def.h,def.d),stdMat(def.color));
+  main.position.y=def.h/2-cY;
+  g.add(edged(main));
+  if(def.id==="bookshelf"||def.id==="chest"){
+    const nsh=def.id==="bookshelf"?4:2;
+    for(let i=1;i<=nsh;i++){
+      const sh=new THREE.Mesh(new THREE.BoxGeometry(def.w*0.96,0.02,def.d*0.9),stdMat(0x3a2a1a));
+      sh.position.y=def.h*i/(nsh+1)-cY;g.add(sh);
+    }
+  }
+  if(def.id==="fridge"){
+    const hd=new THREE.Mesh(new THREE.BoxGeometry(0.03,0.5,0.03),stdMat(0x808a94));
+    hd.position.set(def.w/2+0.02,def.h*0.65-cY,def.d/4);g.add(hd);
+  }
+  return finishFurn(def,body,g);
+}
+
+function makeDesk(def){ // 天板＋4脚の複合剛体
+  const {mass,cogY}=furnCfg(def), cY=cogY, topT=0.04, legW=0.05, legH=def.h-topT;
+  const body=newBody(def,cY,mass);
+  body.addShape(new CANNON.Box(new CANNON.Vec3(def.w/2,topT/2,def.d/2)),
+                new CANNON.Vec3(0,def.h-topT/2-cY,0));
+  const lx=def.w/2-legW*1.2, lz=def.d/2-legW*1.2;
+  for(const sx of[-1,1])for(const sz of[-1,1])
+    body.addShape(new CANNON.Box(new CANNON.Vec3(legW/2,legH/2,legW/2)),
+                  new CANNON.Vec3(sx*lx,legH/2-cY,sz*lz));
+  const g=new THREE.Group();
+  const top=new THREE.Mesh(new THREE.BoxGeometry(def.w,topT,def.d),stdMat(def.color,0.6));
+  top.position.y=def.h-topT/2-cY; g.add(edged(top));
+  for(const sx of[-1,1])for(const sz of[-1,1]){
+    const leg=new THREE.Mesh(new THREE.BoxGeometry(legW,legH,legW),stdMat(0x6b5a42,0.7));
+    leg.position.set(sx*lx,legH/2-cY,sz*lz);leg.castShadow=true;g.add(leg);
+  }
+  const drawer=new THREE.Mesh(new THREE.BoxGeometry(def.w*0.35,0.12,def.d*0.9),stdMat(0x82725a));
+  drawer.position.set(def.w*0.28,def.h-topT-0.07-cY,0);g.add(drawer);
+  return finishFurn(def,body,g);
+}
+
+function makeChair(def){ // 座面＋4脚＋背もたれ（背もたれは机と反対側 +z）
+  const {mass,cogY}=furnCfg(def), cY=cogY, seatT=0.05, legW=0.04, legH=def.seatH-seatT;
+  const body=newBody(def,cY,mass);
+  body.addShape(new CANNON.Box(new CANNON.Vec3(def.w/2,seatT/2,def.d/2)),
+                new CANNON.Vec3(0,def.seatH-seatT/2-cY,0));
+  const lx=def.w/2-legW, lz=def.d/2-legW;
+  for(const sx of[-1,1])for(const sz of[-1,1])
+    body.addShape(new CANNON.Box(new CANNON.Vec3(legW/2,legH/2,legW/2)),
+                  new CANNON.Vec3(sx*lx,legH/2-cY,sz*lz));
+  const backH=def.h-def.seatH;
+  body.addShape(new CANNON.Box(new CANNON.Vec3(def.w/2,backH/2,0.02)),
+                new CANNON.Vec3(0,def.seatH+backH/2-cY,def.d/2-0.02));
+  const g=new THREE.Group();
+  const seat=new THREE.Mesh(new THREE.BoxGeometry(def.w,seatT,def.d),stdMat(def.color,0.7));
+  seat.position.y=def.seatH-seatT/2-cY;g.add(edged(seat));
+  for(const sx of[-1,1])for(const sz of[-1,1]){
+    const leg=new THREE.Mesh(new THREE.BoxGeometry(legW,legH,legW),stdMat(0x3d4a58,0.7));
+    leg.position.set(sx*lx,legH/2-cY,sz*lz);leg.castShadow=true;g.add(leg);
+  }
+  // 背もたれ：2本の支柱＋横板
+  for(const sx of[-1,1]){
+    const post=new THREE.Mesh(new THREE.BoxGeometry(0.04,backH,0.04),stdMat(0x3d4a58,0.7));
+    post.position.set(sx*(def.w/2-0.03),def.seatH+backH/2-cY,def.d/2-0.02);g.add(post);
+  }
+  const slat=new THREE.Mesh(new THREE.BoxGeometry(def.w,0.12,0.03),stdMat(def.color,0.7));
+  slat.position.set(0,def.h-0.1-cY,def.d/2-0.02);g.add(edged(slat));
+  return finishFurn(def,body,g);
+}
+
+function makeBed(def){ // フレーム＋マットレス＋枕＋ヘッドボード（+x側が頭）
+  const {mass,cogY}=furnCfg(def), cY=cogY;
+  const body=newBody(def,cY,mass);
+  body.addShape(new CANNON.Box(new CANNON.Vec3(def.w/2,def.h/2,def.d/2)),
+                new CANNON.Vec3(0,def.h/2-cY,0));
+  body.addShape(new CANNON.Box(new CANNON.Vec3(0.03,(def.headH-def.h)/2,def.d/2)),
+                new CANNON.Vec3(def.w/2-0.03,(def.h+def.headH)/2-cY,0));
+  const g=new THREE.Group();
+  const frame=new THREE.Mesh(new THREE.BoxGeometry(def.w,0.22,def.d),stdMat(def.color,0.7));
+  frame.position.y=0.11-cY;g.add(edged(frame));
+  const mat=new THREE.Mesh(new THREE.BoxGeometry(def.w*0.98,0.20,def.d*0.96),stdMat(0xe8e4da,0.9));
+  mat.position.y=0.22+0.10-cY;g.add(edged(mat));
+  const blanket=new THREE.Mesh(new THREE.BoxGeometry(def.w*0.62,0.05,def.d*0.98),stdMat(0x7d9db8,0.95));
+  blanket.position.set(-def.w*0.18,0.42-cY+0.005,0);g.add(blanket);
+  const pillow=new THREE.Mesh(new THREE.BoxGeometry(0.30,0.08,0.45),stdMat(0xf4f1ea,0.95));
+  pillow.position.set(def.w/2-0.28,0.46-cY,0);g.add(pillow);
+  const head=new THREE.Mesh(new THREE.BoxGeometry(0.06,def.headH,def.d),stdMat(0x5b4128,0.7));
+  head.position.set(def.w/2-0.03,def.headH/2-cY,0);g.add(edged(head));
+  return finishFurn(def,body,g);
+}
+
+function makeLamp(def){
+  const anchorLocal=new CANNON.Vec3(def.pos[0],ROOM_H,def.pos[1]);
+  const body=new CANNON.Body({mass:furnCfg(def).mass});
+  body.addShape(new CANNON.Sphere(0.10));
+  body.position.set(def.pos[0]+roomOffset.px,ROOM_H-def.cord+roomOffset.py,def.pos[1]+roomOffset.pz);
+  body.velocity.set(roomOffset.vx,roomOffset.vy,roomOffset.vz);
+  body.linearDamping=0.02;body.allowSleep=false;
+  world.addBody(body);
+  const c=new CANNON.PointToPointConstraint(body,new CANNON.Vec3(0,def.cord,0),
+                                            roomBody,anchorLocal);
+  world.addConstraint(c);
+  const g=new THREE.Group();
+  const shade=new THREE.Mesh(new THREE.ConeGeometry(0.16,0.16,20,1,true),
+    new THREE.MeshStandardMaterial({color:0x35404d,side:THREE.DoubleSide}));
+  shade.position.y=0.06;g.add(shade);
+  const bulb=new THREE.Mesh(new THREE.SphereGeometry(0.05,12,10),
+    new THREE.MeshStandardMaterial({color:def.color,emissive:0xf5d67a,emissiveIntensity:0.9}));
+  g.add(bulb);
+  const pt=new THREE.PointLight(0xffe6b0,0.6,5);g.add(pt);
+  scene.add(g);
+  const line=new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3()]),
+    new THREE.LineBasicMaterial({color:0x9aa4b2}));
+  scene.add(line);
+  return {def,body,mesh:g,line,anchorLocal,startPos:body.position.clone(),
+          fallen:false,slid:false,constraint:c};
+}
+const BUILDERS={box:makeBoxFurn,desk:makeDesk,chair:makeChair,bed:makeBed,lamp:makeLamp};
+
+function clearFurniture(){
+  for(const f of furniture){
+    world.remove(f.body);
+    if(f.constraint)world.removeConstraint(f.constraint);
+    scene.remove(f.mesh);
+    if(f.line)scene.remove(f.line);
+  }
+  furniture=[];
+}
+function startT(){
+  if(!proc)return 0;
+  const v=parseFloat(document.getElementById("startSkip").value)||0;
+  return Math.min(Math.max(v,0),Math.max(proc.dur-1,0));
+}
+function placeFurniture(){
+  stopSimCore();
+  clearFurniture();
+  if(proc){ tablePose(startT(),roomOffset); }
+  else roomOffset={px:0,py:0,pz:0,vx:0,vy:0,vz:0};
+  roomBody.position.set(roomOffset.px,roomOffset.py,roomOffset.pz);
+  roomBody.velocity.set(0,0,0);
+  roomGroup.position.set(roomOffset.px,roomOffset.py,roomOffset.pz);
+  for(const def of FURN){
+    if(!document.getElementById("chk_"+def.id).checked) continue;
+    furniture.push(BUILDERS[def.kind](def));
+  }
+  updateStatus();
+}
+
+/* =====================================================================
+ * 5. simulation loop — 振動台駆動（変位・速度をキネマティック剛体に付与）
+ *    軸対応: X=EW(+東), Z=NS(+南→画面手前), Y=UD(+上)
+ * ===================================================================== */
+function sampleWave(arr,t){ // linear interp, cm→m
+  const i=t/proc.dt;
+  const i0=Math.floor(i);
+  if(i0>=proc.n-1)return arr[proc.n-1]*0.01;
+  const f=i-i0;
+  return (arr[i0]*(1-f)+arr[i0+1]*f)*0.01;
+}
+function tablePose(t,out){
+  const s=parseFloat(document.getElementById("ampScale").value)||1;
+  out.px= sampleWave(proc.dsp[1],t)*s;          // EW → X
+  out.pz=-sampleWave(proc.dsp[0],t)*s;          // NS → -Z (北=-Z)
+  out.py= sampleWave(proc.dsp[2],t)*s;          // UD → Y
+  out.vx= sampleWave(proc.vel[1],t)*s;
+  out.vz=-sampleWave(proc.vel[0],t)*s;
+  out.vy= sampleWave(proc.vel[2],t)*s;
+  out.ax= sampleWave(proc.acc[1],t)*s;          // m/s^2
+  out.az=-sampleWave(proc.acc[0],t)*s;
+  out.ay= sampleWave(proc.acc[2],t)*s;
+}
+const _pose={px:0,py:0,pz:0,vx:0,vy:0,vz:0,ax:0,ay:0,az:0};
+
+let lastFrame=0;
+function loop(ts){
+  requestAnimationFrame(loop);
+  const dtReal=Math.min((ts-lastFrame)/1000,0.05); lastFrame=ts;
+  if(running&&proc){
+    const speed=parseFloat(document.getElementById("speed").value);
+    simT=Math.min(simT+dtReal*speed,proc.dur);
+    while(physT<simT){
+      physT+=PHYS_DT;
+      tablePose(physT,_pose);
+      roomBody.position.set(_pose.px,_pose.py,_pose.pz);
+      roomBody.velocity.set(_pose.vx,_pose.vy,_pose.vz);
+      world.step(PHYS_DT);
+      applyStiction();
+    }
+    roomGroup.position.set(_pose.px,_pose.py,_pose.pz);
+    document.getElementById("timeRead").textContent=simT.toFixed(1)+" s";
+    if(simT>=proc.dur){ running=false; btnRun.textContent="加振開始"; msg("加振終了"); }
+    updateStatus();
+    drawCursor();
+  }
+  // sync meshes
+  for(const f of furniture){
+    f.mesh.position.copy(f.body.position);
+    f.mesh.quaternion.copy(f.body.quaternion);
+    if(f.line){
+      const a=new THREE.Vector3(f.anchorLocal.x+roomBody.position.x,
+                                f.anchorLocal.y+roomBody.position.y,
+                                f.anchorLocal.z+roomBody.position.z);
+      const pts=f.line.geometry.attributes.position.array;
+      pts[0]=a.x;pts[1]=a.y;pts[2]=a.z;
+      pts[3]=f.body.position.x;pts[4]=f.body.position.y;pts[5]=f.body.position.z;
+      f.line.geometry.attributes.position.needsUpdate=true;
+    }
+  }
+  renderer.render(scene,camera);
+}
+
+/* 静止摩擦の近似：cannonの動摩擦モデルは微小クリープが残り「氷上滑走」化するため、
+   床接触中かつ 相対滑り速度が小さく、追従に要する慣性力 m·|a_table| が
+   静止摩擦力 μ·m·(g+a_y) を下回るときは床（振動台）に速度を固着させる */
+const SLIP_EPS=0.08, SPIN_EPS=0.35;
+function applyStiction(){
+  if(!furniture.length)return;
+  const inContact=new Set();
+  for(const c of world.contacts){
+    if(c.bi===roomBody)inContact.add(c.bj);
+    else if(c.bj===roomBody)inContact.add(c.bi);
+  }
+  const gN=Math.max(9.81+_pose.ay,0);   // 法線方向実効重力（上下動で増減）
+  const demand=Math.hypot(_pose.ax,_pose.az);
+  for(const f of furniture){
+    if(f.def.lamp)continue;
+    if(!inContact.has(f.body))continue;
+    const rvx=f.body.velocity.x-_pose.vx, rvz=f.body.velocity.z-_pose.vz;
+    if(Math.hypot(rvx,rvz)>=SLIP_EPS)continue;               // 既に滑走中→動摩擦に任せる
+    if(f.body.angularVelocity.norm()>=SPIN_EPS)continue;      // ロッキング中は介入しない
+    if(demand>=f.def.mu*gN*0.95)continue;                     // 静止摩擦限界超過→滑り継続
+    f.body.velocity.x=_pose.vx;
+    f.body.velocity.z=_pose.vz;
+    f.body.angularVelocity.scale(0.6,f.body.angularVelocity);
+  }
+}
+
+function updateStatus(){
+  const el=document.getElementById("status");
+  if(!furniture.length){el.innerHTML='<span class="ok">— 未配置 —</span>';return;}
+  const up=new CANNON.Vec3(0,1,0), tmp=new CANNON.Vec3();
+  let html="";
+  for(const f of furniture){
+    if(f.def.lamp){
+      const dx=f.body.position.x-(f.anchorLocal.x+roomBody.position.x);
+      const dz=f.body.position.z-(f.anchorLocal.z+roomBody.position.z);
+      const ang=Math.atan2(Math.hypot(dx,dz),f.def.cord)*180/Math.PI;
+      html+=`<div class="item"><span>${f.def.name}</span><span class="mono ${ang>20?'slide':'ok'}">振れ ${ang.toFixed(0)}°</span></div>`;
+      continue;
+    }
+    f.body.quaternion.vmult(up,tmp);
+    const tilt=Math.acos(Math.max(-1,Math.min(1,tmp.y)))*180/Math.PI;
+    if(tilt>45)f.fallen=true;
+    const relx=f.body.position.x-roomBody.position.x-f.startPos.x;
+    const relz=f.body.position.z-roomBody.position.z-f.startPos.z;
+    const slide=Math.hypot(relx,relz)*100;
+    if(slide>5)f.slid=true;
+    let st,cls;
+    if(f.fallen){st="転倒";cls="fall";}
+    else if(f.slid){st=`移動 ${slide.toFixed(0)}cm`;cls="slide";}
+    else {st=`傾き ${tilt.toFixed(0)}°`;cls="ok";}
+    html+=`<div class="item"><span>${f.def.name}</span><span class="mono ${cls}">${st}</span></div>`;
+  }
+  el.innerHTML=html;
+}
+
+/* =====================================================================
+ * 6. waveform charts
+ * ===================================================================== */
+const chartIds=["cA","cV","cD"];
+const compColors=["#5aa2ff","#3ddc97","#aab4c4"];
+function sizeCharts(){
+  for(const id of chartIds){
+    const c=document.getElementById(id);
+    const r=c.getBoundingClientRect();
+    if(r.width>0){c.width=r.width*devicePixelRatio;c.height=r.height*devicePixelRatio;}
+  }
+}
+let cursorPrev=-1;
+function drawCursor(force){
+  if(!proc)return;
+  const frac=simT/proc.dur;
+  if(!force&&Math.abs(frac-cursorPrev)<0.002)return;
+  cursorPrev=frac;
+  drawChartsBase();
+}
+function drawChartsBase(){
+  drawChartsStatic();
+  const frac=simT/proc.dur;
+  for(const id of chartIds){
+    const c=document.getElementById(id),g=c.getContext("2d");
+    g.strokeStyle="#ffffff";g.lineWidth=1;
+    g.beginPath();g.moveTo(frac*c.width,0);g.lineTo(frac*c.width,c.height);g.stroke();
+  }
+}
+let staticCache=null;
+function drawChartsStatic(){
+  if(!staticCache){drawChartsRaw();cacheStatic();}
+  for(let i=0;i<3;i++){
+    const c=document.getElementById(chartIds[i]);
+    c.getContext("2d").putImageData(staticCache[i],0,0);
+  }
+}
+function cacheStatic(){
+  staticCache=chartIds.map(id=>{
+    const c=document.getElementById(id);
+    return c.getContext("2d").getImageData(0,0,c.width,c.height);
+  });
+}
+function drawChartsRaw(){
+  const sets=[proc.acc,proc.vel,proc.dsp];
+  for(let s=0;s<3;s++){
+    const c=document.getElementById(chartIds[s]),g=c.getContext("2d");
+    const W=c.width,H=c.height;
+    g.clearRect(0,0,W,H);
+    let mx=0;
+    for(const arr of sets[s])for(let i=0;i<arr.length;i++){const v=Math.abs(arr[i]);if(v>mx)mx=v;}
+    if(mx===0)mx=1;
+    g.strokeStyle="#2a3442";g.beginPath();g.moveTo(0,H/2);g.lineTo(W,H/2);g.stroke();
+    for(let comp=0;comp<3;comp++){
+      const arr=sets[s][comp];
+      g.strokeStyle=compColors[comp];g.lineWidth=1;g.beginPath();
+      for(let px=0;px<W;px++){
+        const i0=Math.floor(px/W*arr.length), i1=Math.floor((px+1)/W*arr.length);
+        let lo=1e9,hi=-1e9;
+        for(let i=i0;i<Math.max(i1,i0+1);i++){const v=arr[i];if(v<lo)lo=v;if(v>hi)hi=v;}
+        g.moveTo(px+0.5,H/2-lo/mx*H/2*0.92);g.lineTo(px+0.5,H/2-hi/mx*H/2*0.92);
+      }
+      g.stroke();
+    }
+    g.fillStyle="#8593a5";g.font=`${10*devicePixelRatio}px monospace`;
+    g.fillText("±"+mx.toFixed(1),4*devicePixelRatio,12*devicePixelRatio);
+  }
+}
+
+/* =====================================================================
+ * 7. UI wiring
+ * ===================================================================== */
+const btnRun=document.getElementById("btnRun");
+function msg(t){
+  const m=document.getElementById("msg");
+  m.textContent=t;m.style.display="block";
+  clearTimeout(msg._tm);msg._tm=setTimeout(()=>m.style.display="none",2600);
+}
+function buildFurnList(){
+  const el=document.getElementById("furnList");
+  el.innerHTML=FURN.map(f=>{
+    const spec=f.lamp?`紐${f.cord}m`:`${f.h}m / μ${f.mu}`;
+    const cfg=f.lamp
+      ?`<div class="cfg"><span>質量</span><input type="number" id="m_${f.id}" value="${f.mass}" min="0.5" step="0.5">kg</div>`
+      :`<div class="cfg"><span>質量</span><input type="number" id="m_${f.id}" value="${f.mass}" min="1" step="1">kg
+         <span>重心高</span><input type="number" id="cg_${f.id}" value="50" min="10" max="90" step="5">%</div>`;
+    return `<label class="chk"><input type="checkbox" id="chk_${f.id}" ${f.lamp||["bookshelf","fridge","bed"].includes(f.id)?"checked":""}>
+      <span>${f.name}</span><span class="spec">${spec}</span></label>${cfg}`;
+  }).join("");
+  el.querySelectorAll(".cfg input").forEach(i=>i.addEventListener("change",()=>placeFurniture()));
+}
+function furnCfg(def){
+  const mEl=document.getElementById("m_"+def.id);
+  const mass=Math.max(0.5,parseFloat(mEl&&mEl.value)||def.mass);
+  if(def.lamp)return {mass,cogY:0};
+  const cEl=document.getElementById("cg_"+def.id);
+  const r=Math.min(0.9,Math.max(0.1,(parseFloat(cEl&&cEl.value)||50)/100));
+  return {mass,cogY:def.h*r};
+}
+document.getElementById("btnFile").onclick=()=>document.getElementById("fileInput").click();
+document.getElementById("fileInput").onchange=e=>{
+  const file=e.target.files[0]; if(!file)return;
+  const rd=new FileReader();
+  rd.onload=()=>{
+    try{
+      let text;
+      try{text=new TextDecoder("shift_jis").decode(rd.result);}
+      catch(_){text=new TextDecoder().decode(rd.result);}
+      const rec=parseAnyCsv(text);
+      proc=processRecord(rec);
+      staticCache=null;
+      document.getElementById("fileName").textContent=file.name;
+      let info=`<b>形式</b>${rec.header.type}<br><b>観測点</b>${rec.header.code||"?"}<br>`;
+      if(rec.header.origin)info+=`<b>${rec.header.mag?"発震時刻":"開始時刻"}</b>${rec.header.origin}<br>`;
+      if(rec.header.mag)info+=`<b>M / 深さ</b>M${rec.header.mag} / ${rec.header.depth}km<br>`;
+      info+=`<b>継続時間</b>${proc.dur.toFixed(0)}s @ ${rec.header.fs||100}Hz`;
+      document.getElementById("recInfo").innerHTML=info;
+      document.getElementById("peaks").innerHTML=
+        `<div class="peak pa"><span>PGA（合成最大）</span><span class="v">${proc.pga.toFixed(1)} gal</span></div>`+
+        `<div class="peak pv"><span>PGV（合成最大）</span><span class="v">${proc.pgv.toFixed(1)} cm/s</span></div>`+
+        `<div class="peak pd"><span>PGD（合成最大）</span><span class="v">${proc.pgd.toFixed(1)} cm</span></div>`;
+      document.getElementById("pkA").textContent=proc.pga.toFixed(1);
+      document.getElementById("pkV").textContent=proc.pgv.toFixed(1);
+      document.getElementById("pkD").textContent=proc.pgd.toFixed(1);
+      btnRun.disabled=false;
+      document.getElementById("btnStop").disabled=false;
+      sizeCharts(); drawChartsRaw(); cacheStatic();
+      placeFurniture();
+      msg(rec.fmt==="jma"?"読込・処理完了（気象庁 積分漸化式）":"読込・処理完了（HPF 0.1Hz, 5次 Butterworth）");
+    }catch(err){ msg("読込失敗: "+err.message); }
+  };
+  rd.readAsArrayBuffer(file);
+  e.target.value="";
+};
+btnRun.onclick=()=>{
+  if(!proc)return;
+  if(running){running=false;btnRun.textContent="加振開始";return;}
+  if(simT>=proc.dur||!furniture.length)placeFurniture();
+  running=true;btnRun.textContent="一時停止";
+};
+document.getElementById("btnStop").onclick=()=>placeFurniture();
+function stopSimCore(){
+  running=false;
+  simT=physT=startT();
+  btnRun.textContent="加振開始";
+  document.getElementById("timeRead").textContent=simT.toFixed(1)+" s";
+  if(proc)drawChartsBase();
+}
+document.getElementById("startSkip").onchange=()=>placeFurniture();
+document.getElementById("btnPlace").onclick=placeFurniture;
+document.getElementById("waveToggle").onclick=()=>{
+  const d=document.getElementById("waveDrawer");
+  d.classList.toggle("hidden");
+  document.getElementById("waveToggle").classList.toggle("shift",!d.classList.contains("hidden"));
+  if(!d.classList.contains("hidden")&&proc){sizeCharts();staticCache=null;drawChartsBase();}
+};
+
+buildFurnList();
+initGL();
+initPhysics();
+placeFurniture();
+requestAnimationFrame(ts=>{lastFrame=ts;requestAnimationFrame(loop);});
+</script>
+</body>
+</html>
