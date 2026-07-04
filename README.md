@@ -2,8 +2,7 @@
 
 ## 🌐 Demo / デモ
 Play the simulator in your browser:
-**[Launch Simulator](https://<your-username>.github.io/<your-repository-name>/)**
-*(Please replace the URL with your actual GitHub Pages URL)*
+**[Launch Simulator]([https://princepsnumerorum.github.io/shaking_table_test/]**
 
 ---
 
