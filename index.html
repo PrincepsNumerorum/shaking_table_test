@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>強震動 室内シミュレーター</title>
+<title>強震動 家具挙動シミュレーター</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
 <style>
@@ -74,6 +74,24 @@ select,input[type=number]{background:var(--panel2);color:var(--tx);border:1px so
 #waveToggle.shift{right:350px}
 #orbitToggle{position:absolute;top:44px;right:10px;z-index:11}
 #orbitToggle.shift{right:350px}
+#infoBtn{position:absolute;top:78px;right:10px;z-index:11;width:30px;height:30px;
+  border-radius:50%;font-size:15px;font-weight:bold;padding:0}
+#infoBtn.shift{right:350px}
+#modalBg{position:fixed;inset:0;background:rgba(5,8,12,.72);z-index:50;display:none;
+  align-items:center;justify-content:center}
+#modalBg.show{display:flex}
+#modal{width:min(640px,92vw);max-height:84vh;display:flex;flex-direction:column;
+  background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:18px 20px}
+#modal h1{font-size:15px;margin-bottom:10px;color:var(--acc)}
+#modalTabs{display:flex;gap:6px;margin-bottom:10px}
+#modalTabs button{flex:1;padding:5px 0}
+#modalTabs button.act{background:var(--acc);color:#10151c;border-color:var(--acc)}
+#modalBody{overflow-y:auto;font-size:12px;line-height:1.85;color:var(--fg)}
+#modalBody h3{font-size:12px;color:var(--acc);margin:10px 0 3px}
+#modalBody ul{padding-left:1.3em;margin:2px 0 8px}
+#modalBody li{margin:2px 0}
+#modalBody .warn{color:#f5b942}
+#modalClose{margin-top:12px;width:100%;padding:8px 0;font-size:13px}
 #orbitPanel{position:absolute;left:262px;bottom:16px;z-index:11;display:none;
   background:rgba(14,17,22,.92);border:1px solid var(--line);border-radius:4px;
   padding:8px;transition:left .25s ease}
@@ -122,6 +140,19 @@ body.panel-hidden #orbitPanel{left:12px}
     <h2>家具の選択（複数可）</h2>
     <div id="furnList"></div>
     <div class="row"><button class="grow" id="btnPlace">室内に配置（リセット）</button></div>
+  </div>
+
+  <div class="sec">
+    <h2>正弦波加振（記録不要）</h2>
+    <div class="row"><span style="width:5em">方向</span>
+      <select id="sinDir" class="grow"><option value="NS" selected>NS</option><option value="EW">EW</option></select></div>
+    <div class="row"><span style="width:5em">周期</span>
+      <input type="number" id="sinT" class="grow" value="1.0" min="0.1" max="10" step="0.1"><span>s</span></div>
+    <div class="row"><span style="width:5em">最大変位</span>
+      <input type="number" id="sinA" class="grow" value="10" min="0.5" max="200" step="0.5"><span>cm</span></div>
+    <div class="row"><span style="width:5em">継続時間</span>
+      <input type="number" id="sinDur" class="grow" value="30" min="5" max="120" step="5"><span>s</span></div>
+    <button id="btnSine" style="width:100%;margin-top:4px">正弦波を生成して読み込む</button>
   </div>
 
   <div class="sec">
@@ -175,6 +206,20 @@ body.panel-hidden #orbitPanel{left:12px}
 <button id="panelToggle">≪ パネル</button>
 <button id="waveToggle" class="shift">波形 表示/非表示</button>
 <button id="orbitToggle" class="shift">軌跡 NS-EW</button>
+<button id="infoBtn" class="shift" title="免責事項・使い方・FAQ">？</button>
+
+<div id="modalBg">
+  <div id="modal">
+    <h1>強震応答 室内シミュレーター</h1>
+    <div id="modalTabs">
+      <button data-tab="disc" class="act">免責事項</button>
+      <button data-tab="usage">使い方</button>
+      <button data-tab="faq">よくある質問</button>
+    </div>
+    <div id="modalBody"></div>
+    <button id="modalClose">同意して開始する</button>
+  </div>
+</div>
 
 <div id="accHud">
   <div class="lb">直近1秒 最大加速度（合成）</div>
@@ -502,7 +547,7 @@ const FURN_HOME = [
  {id:"desk",      name:"机",           kind:"desk", w:1.20,d:0.70,h:0.72, mass:25, mu:0.45, color:0x9c8a6e, pos:[1.2,-1.55], face:0},
  {id:"chair",     name:"椅子",         kind:"chair", w:0.42,d:0.42,h:0.82, seatH:0.44, mass:5, mu:0.40, color:0x5a6b7d, pos:[1.2,-0.7], face:0},
  {id:"bed",       name:"ベッド",       kind:"bed", w:1.95,d:0.97,h:0.45, headH:0.85, mass:35, mu:0.40, color:0x6e4f33, pos:[1.35,0.9], face:1, on:true},
- {id:"fridge",    name:"冷蔵庫",       kind:"box", w:0.65,d:0.70,h:1.80, mass:90, mu:0.25, color:0xc4ccd4, pos:[-1.55,0.9], face:1, on:true},
+ {id:"fridge",    name:"冷蔵庫",       kind:"box", w:0.65,d:0.70,h:1.80, mass:90, mu:0.25, color:0xc4ccd4, pos:[-1.55,0.9], face:0, on:true},
  {id:"lamp",      name:"吊り照明（天井から）", kind:"lamp", lamp:true, mass:1.5, cord:1.2, color:0xf5e3a0, pos:[0.3,0.1], on:true},
 ];
 
@@ -518,7 +563,7 @@ const FURN_OFFICE = [
  {id:"ddesk", name:"両袖机", kind:"pdesk", ped:2, w:1.40,d:0.75,h:0.72, mass:48, mu:0.30, color:0xdfe2e6, on:true,
   units:[{pos:[2.35,1.4],face:1}]},
  {id:"ochair", name:"オフィスチェア（キャスター）", kind:"ochair", w:0.48,d:0.48,h:0.92, seatH:0.46, mass:12, mu:0.08, color:0x2f3a46, on:true,
-  units:[{pos:[-1.5,-1.08],face:2},{pos:[-1.5,1.08],face:0},{pos:[1.3,-1.12],face:2},{pos:[1.5,1.4],face:3}]},
+  units:[{pos:[-1.5,-1.08],face:2},{pos:[-1.5,1.08],face:0},{pos:[1.3,-1.12],face:0},{pos:[1.5,1.4],face:3}]},
  {id:"monitor", name:"液晶ディスプレイ（机上）", kind:"monitor", w:0.55,d:0.18,h:0.42, mass:5, mu:0.35, color:0x14181d, on:true,
   units:[{pos:[-1.5,-0.24],face:2,y0:0.70},{pos:[-1.5,0.24],face:0,y0:0.70},
          {pos:[1.3,-2.0],face:0,y0:0.70},{pos:[2.52,1.4],face:3,y0:0.72}]},
@@ -731,15 +776,57 @@ function makeBoxFurn(def){
   body.addShape(new CANNON.Box(new CANNON.Vec3(def.w/2,def.h/2,def.d/2)),
                 new CANNON.Vec3(0,def.h/2-cY,0));
   const g=new THREE.Group();
-  const main=new THREE.Mesh(new THREE.BoxGeometry(def.w,def.h,def.d),stdMat(def.color));
-  main.position.y=def.h/2-cY;
-  g.add(edged(main));
-  if(def.id==="bookshelf"||def.id==="chest"){
-    const nsh=def.id==="bookshelf"?4:2;
-    for(let i=1;i<=nsh;i++){
-      const sh=new THREE.Mesh(new THREE.BoxGeometry(def.w*0.96,0.02,def.d*0.9),stdMat(0x3a2a1a));
-      sh.position.y=def.h*i/(nsh+1)-cY;g.add(sh);
+  if(def.id==="bookshelf"){ // オープン本棚：枠＋背板＋棚板＋書籍
+    const t=0.022, iw=def.w-2*t;
+    const back=new THREE.Mesh(new THREE.BoxGeometry(def.w,def.h,0.012),stdMat(0x6d4426));
+    back.position.set(0,def.h/2-cY,-def.d/2+0.006);g.add(back);
+    for(const s of[-1,1]){
+      const side=new THREE.Mesh(new THREE.BoxGeometry(t,def.h,def.d),stdMat(def.color));
+      side.position.set(s*(def.w/2-t/2),def.h/2-cY,0);side.castShadow=true;g.add(edged(side));
     }
+    const nsh=5; // 棚板6枚（天・底含む）で5段
+    const bookCols=[0x8a3b2e,0x3b5a7a,0x6b7a3b,0x7a5a8a,0x9c7b3a,0x40606a,0x8a6a4a];
+    let rng=2;
+    for(let i=0;i<=nsh;i++){
+      const y=t/2+(def.h-t)*i/nsh-cY;
+      const sh=new THREE.Mesh(new THREE.BoxGeometry(def.w,t,def.d),stdMat(def.color));
+      sh.position.y=y;sh.castShadow=true;g.add(edged(sh));
+      if(i<nsh){ // 段内に書籍列（高さ乱数風・決定的）
+        const cellH=(def.h-t)/nsh-t;
+        let x=-iw/2+0.015;
+        while(x<iw/2-0.05){
+          rng=(rng*48271)%2147483647;
+          const bw=0.028+ (rng%1000)/1000*0.03;
+          rng=(rng*48271)%2147483647;
+          const bh=cellH*(0.55+(rng%1000)/1000*0.35);
+          rng=(rng*48271)%2147483647;
+          const bk=new THREE.Mesh(new THREE.BoxGeometry(bw,bh,def.d*0.72),
+            stdMat(bookCols[rng%bookCols.length],0.85));
+          bk.position.set(x+bw/2,y+t/2+bh/2,-def.d*0.06);g.add(bk);
+          x+=bw+0.006;
+        }
+      }
+    }
+  }else if(def.id==="chest"){ // 箪笥：本体＋3段引き出し前板＋取っ手＋脚
+    const main=new THREE.Mesh(new THREE.BoxGeometry(def.w,def.h,def.d),stdMat(def.color));
+    main.position.y=def.h/2-cY;g.add(edged(main));
+    const rows=3, fh=def.h/rows-0.02;
+    for(let i=0;i<rows;i++){
+      const fy=def.h*(i+0.5)/rows-cY;
+      const fc=new THREE.Mesh(new THREE.BoxGeometry(def.w*0.94,fh,0.014),stdMat(0xb98f63,0.8));
+      fc.position.set(0,fy,def.d/2+0.007);g.add(edged(fc));
+      for(const s of[-1,1]){
+        const kn=new THREE.Mesh(new THREE.CylinderGeometry(0.014,0.014,0.02,10),stdMat(0x4a3a2a,0.5));
+        kn.rotation.x=Math.PI/2;
+        kn.position.set(s*def.w*0.22,fy,def.d/2+0.024);g.add(kn);
+      }
+    }
+    const topb=new THREE.Mesh(new THREE.BoxGeometry(def.w*1.04,0.02,def.d*1.04),stdMat(0x7a5a3a));
+    topb.position.y=def.h+0.01-cY;g.add(topb);
+  }else{
+    const main=new THREE.Mesh(new THREE.BoxGeometry(def.w,def.h,def.d),stdMat(def.color));
+    main.position.y=def.h/2-cY;
+    g.add(edged(main));
   }
   if(def.id==="fridge"){
     const hd=new THREE.Mesh(new THREE.BoxGeometry(0.03,0.5,0.03),stdMat(0x808a94));
@@ -1132,6 +1219,7 @@ function loop(ts){
       roomBody.velocity.set(_pose.vx,_pose.vy,_pose.vz);
       world.step(PHYS_DT);
       applyStiction();
+      limitLampSwing();
     }
     roomGroup.position.set(_pose.px,_pose.py,_pose.pz);
     document.getElementById("timeRead").textContent=simT.toFixed(1)+" s";
@@ -1185,6 +1273,32 @@ function loop(ts){
 const SLIP_BREAK=0.08, SLIP_LOCK=0.03;   // 相対滑り速度：離脱／再固着のしきい値(m/s)
 const SPIN_BREAK=0.35, SPIN_LOCK=0.15;   // 角速度：離脱／再固着のしきい値(rad/s)
 const MUS_OVER_MUK=1.3; // 静止摩擦係数/動摩擦係数の代表的な比（木材・畳・カーペット等）
+/* 吊り具（吊り照明・LED蛍光灯）の振れ角リミッタ。
+   PointToPointConstraintは剛リンクのため大振幅時に天井を越えて一回転できてしまう。
+   実際の紐吊りでは~70°を超える振れは生じにくいので、超過時に部屋相対速度と
+   角速度を強く減衰させて巻き上がりを防ぐ（通常の振れには影響しない）。 */
+const LAMP_MAX_SWING=70*Math.PI/180;
+function limitLampSwing(){
+  for(const f of furniture){
+    if(!f.cords)continue;
+    let ax=0,ay=0,az=0;
+    for(const c of f.cords){ax+=c.anchorLocal.x;ay+=c.anchorLocal.y;az+=c.anchorLocal.z;}
+    const m=f.cords.length;
+    ax=ax/m+roomBody.position.x; ay=ay/m+roomBody.position.y; az=az/m+roomBody.position.z;
+    const rx=f.body.position.x-ax, ry=f.body.position.y-ay, rz=f.body.position.z-az;
+    const phi=Math.atan2(Math.hypot(rx,rz),-ry); // 鉛直下向きからの振れ角（>90°で上方）
+    if(phi>LAMP_MAX_SWING){
+      const ex=Math.min(1,(phi-LAMP_MAX_SWING)/(20*Math.PI/180));
+      const fac=1-0.35*ex; // 超過量に応じ強く減衰
+      const v=f.body.velocity, rv=roomBody.velocity;
+      v.x=rv.x+(v.x-rv.x)*fac;
+      v.y=rv.y+(v.y-rv.y)*fac;
+      v.z=rv.z+(v.z-rv.z)*fac;
+      f.body.angularVelocity.scale(fac,f.body.angularVelocity);
+    }
+  }
+}
+
 function applyStiction(){
   if(!furniture.length)return;
   const inContact=new Set();
@@ -1511,12 +1625,66 @@ document.getElementById("sceneSel").onchange=e=>{
   placeFurniture();
   msg(SCENES[SCENE].label+" に切替");
 };
+/* ---- 免責事項・使い方・FAQ モーダル ---- */
+const MODAL_TEXT={
+disc:`<h3>免責事項</h3>
+<ul>
+<li>本シミュレーターは<b>教育・防災啓発を目的とした簡易的な物理演算デモ</b>です。実際の地震時における家具の挙動・建物応答を正確に再現するものではありません。</li>
+<li>剛体物理・摩擦・建物モデル（等質量等剛性のせん断型多質点系）はいずれも簡略化されており、<span class="warn">構造設計、耐震診断、家具固定の要否判断、安全性評価等の根拠として使用しないでください。</span></li>
+<li>シミュレーション結果の利用により生じたいかなる損害についても、作成者は責任を負いません。</li>
+<li>K-NET / KiK-net（防災科研）、気象庁等の強震記録を読み込む場合は、各機関のデータ利用規約に従ってください。</li>
+<li>実際の地震への備え（家具固定・避難計画等）は、自治体や専門機関の公式情報に基づいて行ってください。</li>
+</ul>`,
+usage:`<h3>基本の流れ</h3>
+<ul>
+<li><b>① 波形の用意</b>：K-NET/KiK-net または気象庁の加速度CSVを「波形ファイル」から読み込む。記録がない場合は「正弦波加振」で方向・周期・最大変位を指定して生成。</li>
+<li><b>② 室内空間</b>：一般家庭（和室）／オフィスを選択。家具はチェックで配置切替、質量・重心高も変更可能。</li>
+<li><b>③ 建物応答（任意）</b>：「建物内の階で加振」をONにし、構造種別（S造/RC造）・階数・対象階を指定すると、多質点せん断モデルの時刻歴応答解析（Newmark-β法）で求めた床応答で加振します。</li>
+<li><b>④ 加振開始</b>：再生速度・振幅倍率・NS↔EW入替・開始スキップを設定して実行。</li>
+</ul>
+<h3>画面操作</h3>
+<ul>
+<li>ドラッグ：視点回転 ／ ホイール：ズーム</li>
+<li>右上ボタン：波形チャート、NS-EW変位軌跡（オービット）の表示切替</li>
+<li>左上「パネル」：操作パネルの格納・展開</li>
+<li>画面上部HUD：直近1秒間の最大合成加速度（gal）</li>
+</ul>`,
+faq:`<h3>よくある質問</h3>
+<ul>
+<li><b>Q. 対応している波形形式は？</b><br>A. K-NET/KiK-net ASCII形式および気象庁の加速度CSV（3成分）です。100Hz以外は内部で100Hzに再標本化します。</li>
+<li><b>Q. gal とは？</b><br>A. 加速度の単位で 1 gal = 1 cm/s²。重力加速度は約980 galです。</li>
+<li><b>Q. 家具はどうなると「転倒」「移動」と判定される？</b><br>A. 傾きが45°を超えると転倒、水平移動が5cmを超えると移動と表示します。</li>
+<li><b>Q. 建物モデルの諸元は？</b><br>A. 階高4m・各階1000tの等質量等剛性せん断型。1次固有周期はS造 T₁=0.03H、RC造 T₁=0.02H に整合するよう剛性を設定し、減衰はRayleigh型（S造2%、RC造3%）です。</li>
+<li><b>Q. 上層階ほど揺れが大きくなるのはなぜ？</b><br>A. 建物の固有周期に近い成分が共振的に増幅されるためです。長周期地震動では超高層の上層階で地表より大きな揺れになります。</li>
+<li><b>Q. 吊り照明の振れが一定以上大きくならない？</b><br>A. 紐吊りの物理近似の都合上、振れ角を約70°で制限しています。</li>
+<li><b>Q. 動作が重い場合は？</b><br>A. 家具のチェックを減らす、波形・軌跡パネルを閉じる、再生速度を下げる等を試してください。</li>
+<li><b>Q. 記録データを持っていない場合は？</b><br>A. 「正弦波加振」で任意の周期・振幅の揺れを生成できます。長周期（2〜6s）大変位を与えると高層階の長周期地震動の体感に近い挙動が観察できます。</li>
+</ul>`};
+function showModal(tab){
+  document.getElementById("modalBg").classList.add("show");
+  setModalTab(tab||"disc");
+}
+function setModalTab(tab){
+  document.querySelectorAll("#modalTabs button").forEach(b=>
+    b.classList.toggle("act",b.dataset.tab===tab));
+  document.getElementById("modalBody").innerHTML=MODAL_TEXT[tab];
+  document.getElementById("modalClose").textContent=
+    tab==="disc"?"同意して開始する":"閉じる";
+}
+document.querySelectorAll("#modalTabs button").forEach(b=>
+  b.onclick=()=>setModalTab(b.dataset.tab));
+document.getElementById("modalClose").onclick=()=>
+  document.getElementById("modalBg").classList.remove("show");
+document.getElementById("infoBtn").onclick=()=>showModal("disc");
+showModal("disc"); // スタート画面で表示
+
 document.getElementById("waveToggle").onclick=()=>{
   const d=document.getElementById("waveDrawer");
   d.classList.toggle("hidden");
   const shown=!d.classList.contains("hidden");
   document.getElementById("waveToggle").classList.toggle("shift",shown);
   document.getElementById("orbitToggle").classList.toggle("shift",shown);
+  document.getElementById("infoBtn").classList.toggle("shift",shown);
   if(shown&&proc){sizeCharts();staticCache=null;drawChartsBase();}
 };
 document.getElementById("panelToggle").onclick=()=>{
@@ -1538,6 +1706,41 @@ document.getElementById("swapNSEW").onchange=()=>{
       ?"入替: NS記録→EW軸 / EW記録→NS軸":"通常: NS記録→NS軸 / EW記録→EW軸");
 };
 document.getElementById("ampScale").onchange=()=>{orbitCache=null;drawOrbit();updateAccHud();};
+document.getElementById("btnSine").onclick=()=>{
+  const dir=document.getElementById("sinDir").value;
+  const T=Math.max(0.1,parseFloat(document.getElementById("sinT").value)||1);
+  const A=Math.max(0.1,parseFloat(document.getElementById("sinA").value)||10); // cm
+  const dur=Math.max(5,parseFloat(document.getElementById("sinDur").value)||30);
+  const dt=0.01, n=Math.round(dur/dt)+1, w=2*Math.PI/T;
+  const ci=dir==="NS"?0:1;
+  const dsp=[0,1,2].map(()=>new Float64Array(n));
+  for(let i=0;i<n;i++){
+    const t=i*dt;
+    const env=Math.max(0,Math.min(1,t/(2*T),(dur-t)/(2*T))); // 立上げ/立下げ2周期テーパ
+    dsp[ci][i]=A*env*Math.sin(w*t);
+  }
+  const diff=a=>{const o=new Float64Array(n);
+    for(let i=0;i<n;i++)o[i]=((a[Math.min(i+1,n-1)]-a[Math.max(i-1,0)])/((Math.min(i+1,n-1)-Math.max(i-1,0))*dt));
+    return o;};
+  const vel=dsp.map(diff), acc=vel.map(diff); // cm/s, gal
+  let pga=0,pgv=0,pgd=0;
+  for(let i=0;i<n;i++){
+    pga=Math.max(pga,Math.abs(acc[ci][i]));
+    pgv=Math.max(pgv,Math.abs(vel[ci][i]));
+    pgd=Math.max(pgd,Math.abs(dsp[ci][i]));
+  }
+  procGround={acc,vel,dsp,n,dt,dur:(n-1)*dt,pga,pgv,pgd};
+  document.getElementById("fileName").textContent=`正弦波 ${dir} T=${T}s A=${A}cm`;
+  document.getElementById("recInfo").innerHTML=
+    `<b>形式</b>正弦波（合成）<br><b>方向</b>${dir}<br>`+
+    `<b>周期 / 振幅</b>${T}s / ${A}cm<br>`+
+    `<b>理論最大加速度</b>${(A*w*w).toFixed(1)} gal<br>`+
+    `<b>継続時間</b>${dur}s @ 100Hz（両端2周期テーパ）`;
+  btnRun.disabled=false;
+  document.getElementById("btnStop").disabled=false;
+  applyBuildingMode();
+  msg(`正弦波生成: ${dir} T=${T}s A=${A}cm`);
+};
 for(const id of["bldOn","bldType","bldN","bldFloor"])
   document.getElementById(id).onchange=()=>{
     applyBuildingMode();
