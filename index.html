@@ -1679,7 +1679,7 @@ function furnCfg(def){
 }
 function refreshPeaks(){
   if(!proc)return;
-  const tag=proc.bld?`（${proc.bld.floor}階床応答）`:"（地表）";
+  const tag=proc.bld?`（${proc.bld.floor}階の揺れ）`:"（地表）";
   document.getElementById("peaks").innerHTML=
     `<div class="peak pa"><span>PA最大 ${tag}</span><span class="v">${proc.pga.toFixed(1)} gal</span></div>`+
     `<div class="peak pv"><span>PV最大 ${tag}</span><span class="v">${proc.pgv.toFixed(1)} cm/s</span></div>`+
@@ -1787,8 +1787,8 @@ usage:`<h3>基本の流れ</h3>
 <ul>
 <li><b>① 波形の用意</b>：「波形ファイル」からK-NET/KiK-net CSV形式または気象庁の加速度CSV（3成分）を読み込みます。ヘッダから観測点・発震時刻等を自動抽出し、加速度を積分して速度・変位波形を生成します。記録がない場合は「正弦波加振」で方向（NS/EW）・周期・最大変位・継続時間を指定して合成波を生成できます。</li>
 <li><b>② 室内空間</b>：「室内空間」で一般家庭（和室 4.2×4.2m）／オフィス（6.4×5.2m）を切替。家具・小物はチェックで個別に配置切替でき、質量と重心高（%）も変更可能です。重心を高くすると転倒しやすくなります。</li>
-<li><b>③ 建物応答</b>：「建物内の階で加振」をONにすると、多質点せん断モデルの時刻歴応答解析（Newmark-β法、Rayleigh減衰）で求めた指定階の床応答（絶対加速度・速度・変位）で部屋を加振します。構造種別（S造：T₁=0.03H・h=2% ／ RC造：T₁=0.02H・h=3%、階高4m）、階数（3〜50）、対象階を指定します。地表比のPA増幅率が表示されます。</li>
-<li><b>④ 加振</b>：「加振開始」で実行。再生速度（スロー〜等速）、振幅倍率、NS↔EW入替、開始時刻スキップを設定できます。「初期配置に戻す」で何度でもやり直せます。</li>
+<li><b>③ 建物応答</b>：「建物内の階で加振」をONにすると、多質点せん断モデルの時刻歴応答解析（Newmark-β法、Rayleigh減衰）で求めた指定階の揺れ（絶対加速度・速度・変位）で部屋を加振します。構造種別（S造：T₁=0.03H・h=2% ／ RC造：T₁=0.02H・h=3%、階高4m）、階数（3〜50）、対象階を指定します。地表比のPA増幅率が表示されます。</li>
+<li><b>④ 加振</b>：「加振開始」で実行。再生速度（0.25倍速〜2倍速）、振幅倍率、NS↔EW入替、開始時刻スキップを設定できます。「初期配置に戻す」で何度でもやり直せます。</li>
 </ul>
 <h3>画面の見方・操作</h3>
 <ul>
@@ -1905,7 +1905,7 @@ for(const id of["bldOn","bldType","bldN","bldFloor"])
   document.getElementById(id).onchange=()=>{
     applyBuildingMode();
     if(procGround&&document.getElementById("bldOn").checked&&proc.bld)
-      msg(`${proc.bld.N}階建${proc.bld.type}造 ${proc.bld.floor}階の床応答で加振（T₁=${proc.bld.T1.toFixed(2)}s）`);
+      msg(`${proc.bld.N}階建${proc.bld.type}造 ${proc.bld.floor}階の揺れで加振（T₁=${proc.bld.T1.toFixed(2)}s）`);
   };
 
 buildFurnList();
