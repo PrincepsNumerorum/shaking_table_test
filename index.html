@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>強震動 家具挙動シミュレーター</title>
+<title>強震動 室内挙動シミュレータ</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
 <style>
@@ -114,13 +114,13 @@ body.panel-hidden #orbitPanel{left:12px}
 <div id="view"></div>
 
 <div id="panel">
-  <h1>強震動 家具挙動シミュレーター</h1>
-  <div class="sub">K-NET / KiK-net CSV → 変位波形 → 振動台加振</div>
+  <h1>強震動 室内挙動シミュレータ</h1>
+  <div class="sub">波形データ(.csv) → 変位波形に変換 → 加振</div>
 
   <div class="sec">
     <h2>室内空間</h2>
     <select id="sceneSel" style="width:100%">
-      <option value="home" selected>一般家庭（和室）</option>
+      <option value="home" selected>一般家庭</option>
       <option value="office">オフィス</option>
     </select>
   </div>
@@ -143,7 +143,7 @@ body.panel-hidden #orbitPanel{left:12px}
   </div>
 
   <div class="sec">
-    <h2>正弦波加振（記録不要）</h2>
+    <h2>正弦波で加振</h2>
     <div class="row"><span style="width:5em">方向</span>
       <select id="sinDir" class="grow"><option value="NS" selected>NS</option><option value="EW">EW</option></select></div>
     <div class="row"><span style="width:5em">周期</span>
@@ -205,12 +205,12 @@ body.panel-hidden #orbitPanel{left:12px}
 
 <button id="panelToggle">≪ パネル</button>
 <button id="waveToggle" class="shift">波形 表示/非表示</button>
-<button id="orbitToggle" class="shift">軌跡 NS-EW</button>
+<button id="orbitToggle" class="shift">変位軌跡 NS-EW</button>
 <button id="infoBtn" class="shift" title="免責事項・使い方・FAQ">？</button>
 
 <div id="modalBg">
   <div id="modal">
-    <h1>強震応答 室内シミュレーター</h1>
+    <h1>強震動 室内挙動シミュレータ</h1>
     <div id="modalTabs">
       <button data-tab="disc" class="act">免責事項</button>
       <button data-tab="usage">使い方</button>
@@ -222,12 +222,12 @@ body.panel-hidden #orbitPanel{left:12px}
 </div>
 
 <div id="accHud">
-  <div class="lb">直近1秒 最大加速度（合成）</div>
+  <div class="lb">直近1秒 最大加速度（3成分合成）</div>
   <span class="v" id="accRead">—</span> <span class="u">gal</span>
 </div>
 
 <div id="orbitPanel">
-  <h2>変位軌跡（水平面 NS-EW）</h2>
+  <h2>変位軌跡（NS-EW）</h2>
   <canvas id="orbitCanvas"></canvas>
 </div>
 
@@ -524,7 +524,7 @@ function buildingResponse(pg,cfg){
     }
     acc.push(outA);vel.push(outV);dsp.push(outD);
   }
-  acc.push(Float64Array.from(pg.acc[2]));          // UDは地表波
+  acc.push(Float64Array.from(pg.acc[2]));          // UDは地表観測波
   vel.push(Float64Array.from(pg.vel[2]));
   dsp.push(Float64Array.from(pg.dsp[2]));
   let pga=0,pgv=0,pgd=0;
@@ -543,62 +543,62 @@ function buildingResponse(pg,cfg){
  *    units: 同一品目を複数配置（pos, face=90°単位回転, y0=床/机上高さ）
  * ===================================================================== */
 const FURN_HOME = [
- {id:"bookshelf", name:"本棚（背高）",  kind:"box", w:0.90,d:0.30,h:1.80, mass:70, mu:0.30, color:0x8a5a33, pos:[-1.5,-1.55], face:0, on:true},
- {id:"chest",     name:"衣装棚（背低）", kind:"box", w:0.90,d:0.45,h:0.90, mass:45, mu:0.35, color:0xa9825a, on:true, pos:[-0.2,-1.50], face:0},
+ {id:"bookshelf", name:"本棚",  kind:"box", w:0.90,d:0.30,h:1.80, mass:70, mu:0.30, color:0x8a5a33, pos:[-1.5,-1.55], face:0, on:true},
+ {id:"chest",     name:"衣装棚", kind:"box", w:0.90,d:0.45,h:0.90, mass:45, mu:0.35, color:0xa9825a, on:true, pos:[-0.2,-1.50], face:0},
  {id:"desk",      name:"机",           kind:"desk", w:1.20,d:0.70,h:0.72, mass:25, mu:0.45, color:0x9c8a6e, on:true, pos:[1.2,-1.55], face:0, on:true},
  {id:"chair",     name:"椅子",         kind:"chair", w:0.42,d:0.42,h:0.82, seatH:0.44, mass:5, mu:0.40, color:0x5a6b7d, on:true, pos:[1.2,-0.7], face:0, on:true},
  {id:"bed",       name:"ベッド",       kind:"bed", w:1.95,d:0.97,h:0.45, headH:0.85, mass:35, mu:0.40, color:0x6e4f33, pos:[1.35,0.9], face:1, on:true},
  {id:"fridge",    name:"冷蔵庫",       kind:"box", w:0.65,d:0.70,h:1.80, mass:90, mu:0.25, color:0xc4ccd4, pos:[-1.55,0.9], face:0, on:true},
- {id:"lamp",      name:"吊り照明（天井から）", kind:"lamp", lamp:true, mass:1.5, cord:1.2, color:0xf5e3a0, pos:[0.3,0.1], on:true},
+ {id:"lamp",      name:"吊り照明", kind:"lamp", lamp:true, mass:1.5, cord:1.2, color:0xf5e3a0, pos:[0.3,0.1], on:true},
  {id:"shelftop",  name:"本棚上の花瓶",   kind:"box", w:0.12,d:0.12,h:0.24, mass:1.2, mu:0.35, color:0x7a9aa8, on:true,
   units:[{pos:[-1.65,-1.55],y0:1.80}]},
  {id:"deskbooks", name:"机上の本", kind:"box", w:0.22,d:0.16,h:0.05, mass:0.8, mu:0.45, color:0x8a3b2e, on:true,
   units:[{pos:[1.45,-1.60],y0:0.72},{pos:[1.44,-1.61],face:0,y0:0.775}]},
  {id:"clock", name:"目覚まし時計", kind:"box", w:0.11,d:0.06,h:0.13, mass:0.4, mu:0.45, color:0xc4553a, on:true,
   units:[{pos:[0.95,-1.55],y0:0.72}]},
- {id:"chesttop",  name:"箪笥上の写真立て", kind:"box", w:0.16,d:0.04,h:0.20, mass:0.5, mu:0.40, color:0x5a4a38, on:true,
+ {id:"chesttop",  name:"タンス上の写真立て", kind:"box", w:0.16,d:0.04,h:0.20, mass:0.5, mu:0.40, color:0x5a4a38, on:true,
   units:[{pos:[-0.2,-1.55],y0:0.90}]},
 ];
 
 /* オフィス：室 6.4×5.2m。島型対面デスク・袖机・キャスター椅子・
    キャビネット・段ボール・パーテーション・机上PC/ディスプレイ・複合機・両端吊りLED */
 const FURN_OFFICE = [
- {id:"ledbar", name:"LED蛍光灯（両端吊り）", kind:"lampbar", lamp:true, mass:3, cord:0.5, len:1.25, color:0xf4f7fb, on:true,
+ {id:"ledbar", name:"LED蛍光灯", kind:"lampbar", lamp:true, mass:3, cord:0.5, len:1.25, color:0xf4f7fb, on:true,
   units:[{pos:[-1.5,-1.0]},{pos:[1.1,-1.0]},{pos:[-1.5,1.2]},{pos:[1.1,1.2]}]},
- {id:"fdesk", name:"平机（島型対面）", kind:"pdesk", ped:0, w:1.20,d:0.70,h:0.70, mass:22, mu:0.30, color:0xe9ebee, on:true,
+ {id:"fdesk", name:"平机", kind:"pdesk", ped:0, w:1.20,d:0.70,h:0.70, mass:22, mu:0.30, color:0xe9ebee, on:true,
   units:[{pos:[-1.5,-0.42],face:0},{pos:[-1.5,0.42],face:2}]},
  {id:"sdesk", name:"片袖机", kind:"pdesk", ped:1, w:1.20,d:0.70,h:0.70, mass:32, mu:0.30, color:0xe4e7eb, on:true,
   units:[{pos:[1.3,-1.85],face:0}]},
  {id:"ddesk", name:"両袖机", kind:"pdesk", ped:2, w:1.40,d:0.75,h:0.72, mass:48, mu:0.30, color:0xdfe2e6, on:true,
   units:[{pos:[2.35,1.4],face:1}]},
- {id:"ochair", name:"オフィスチェア（キャスター）", kind:"ochair", w:0.48,d:0.48,h:0.92, seatH:0.46, mass:12, mu:0.08, color:0x2f3a46, on:true,
+ {id:"ochair", name:"オフィスチェア", kind:"ochair", w:0.48,d:0.48,h:0.92, seatH:0.46, mass:12, mu:0.08, color:0x2f3a46, on:true,
   units:[{pos:[-1.5,-1.08],face:2},{pos:[-1.5,1.08],face:0},{pos:[1.3,-1.12],face:0},{pos:[1.5,1.4],face:3}]},
- {id:"monitor", name:"液晶ディスプレイ（机上）", kind:"monitor", w:0.55,d:0.18,h:0.42, mass:5, mu:0.35, color:0x14181d, on:true,
+ {id:"monitor", name:"液晶ディスプレイ", kind:"monitor", w:0.55,d:0.18,h:0.42, mass:5, mu:0.35, color:0x14181d, on:true,
   units:[{pos:[-1.5,-0.24],face:2,y0:0.70},{pos:[-1.5,0.24],face:0,y0:0.70},
          {pos:[1.3,-2.0],face:0,y0:0.70},{pos:[2.52,1.4],face:3,y0:0.72}]},
- {id:"minipc", name:"小型PC（机上）", kind:"box", w:0.10,d:0.32,h:0.34, mass:5, mu:0.35, color:0x2a2f36, on:true,
+ {id:"minipc", name:"小型PC", kind:"box", w:0.10,d:0.32,h:0.34, mass:5, mu:0.35, color:0x2a2f36, on:true,
   units:[{pos:[1.74,-1.85],face:0,y0:0.70},{pos:[2.3,0.95],face:1,y0:0.72}]},
  {id:"cab", name:"書類キャビネット", kind:"cabinet", w:0.88,d:0.42,h:1.85, mass:65, mu:0.28, color:0xc9ced4, on:true,
   units:[{pos:[-2.4,-2.3],face:0},{pos:[-1.45,-2.3],face:0}]},
- {id:"cbox", name:"段ボール箱（積上げ）", kind:"box", w:0.48,d:0.36,h:0.33, mass:7, mu:0.45, color:0xb08d57, on:true,
+ {id:"cbox", name:"段ボール箱", kind:"box", w:0.48,d:0.36,h:0.33, mass:7, mu:0.45, color:0xb08d57, on:true,
   units:[{pos:[2.7,-2.25],y0:0},{pos:[2.7,-2.25],y0:0.335},{pos:[2.68,-2.23],y0:0.67},{pos:[2.7,-1.72],y0:0}]},
  {id:"part", name:"フロアパーテーション", kind:"partition", w:1.20,d:0.45,h:1.60, mass:14, mu:0.35, color:0x7f8fa0, on:true,
   units:[{pos:[0.2,-0.15],face:1},{pos:[0.2,1.05],face:1}]},
- {id:"copier", name:"複合機（キャスター付）", kind:"copier", w:0.62,d:0.68,h:1.10, mass:110, mu:0.05, color:0xe3e6ea, on:true,
+ {id:"copier", name:"複合機", kind:"copier", w:0.62,d:0.68,h:1.10, mass:110, mu:0.05, color:0xe3e6ea, on:true,
   units:[{pos:[-2.6,1.9],face:1}]},
- {id:"keybd", name:"キーボード（机上）", kind:"box", w:0.36,d:0.14,h:0.025, mass:0.8, mu:0.40, color:0x22272e, on:true,
+ {id:"keybd", name:"キーボード", kind:"box", w:0.36,d:0.14,h:0.025, mass:0.8, mu:0.40, color:0x22272e, on:true,
   units:[{pos:[-1.5,-0.55],face:0,y0:0.70},{pos:[-1.5,0.55],face:0,y0:0.70},
          {pos:[1.3,-1.66],face:0,y0:0.70},{pos:[2.12,1.4],face:1,y0:0.72}]},
- {id:"mug", name:"マグカップ（机上）", kind:"box", w:0.08,d:0.08,h:0.095, mass:0.35, mu:0.35, color:0xc4553a, on:true,
+ {id:"mug", name:"マグカップ", kind:"box", w:0.08,d:0.08,h:0.095, mass:0.35, mu:0.35, color:0xc4553a, on:true,
   units:[{pos:[-1.1,-0.6],y0:0.70},{pos:[-1.9,0.6],y0:0.70}]},
- {id:"phone", name:"電話機（机上）", kind:"box", w:0.20,d:0.22,h:0.07, mass:1.0, mu:0.45, color:0x30363e, on:true,
+ {id:"phone", name:"電話機", kind:"box", w:0.20,d:0.22,h:0.07, mass:1.0, mu:0.45, color:0x30363e, on:true,
   units:[{pos:[2.35,1.9],face:1,y0:0.72}]},
  {id:"docs", name:"書類の山", kind:"box", w:0.30,d:0.22,h:0.06, mass:1.5, mu:0.35, color:0xdfe3e8, on:true,
   units:[{pos:[-2.4,-2.3],y0:1.85},{pos:[0.95,-1.95],y0:0.70}]},
 ];
 
 const SCENES={
- home:  {label:"一般家庭（和室）", W:4.2, D:4.2, H:2.4, floor:0xb9a988, base:0x6b7686, cam:8.2,  tile:0,   furn:FURN_HOME},
+ home:  {label:"一般家庭", W:4.2, D:4.2, H:2.4, floor:0xb9a988, base:0x6b7686, cam:8.2,  tile:0,   furn:FURN_HOME},
  office:{label:"オフィス",        W:6.4, D:5.2, H:2.6, floor:0x9aa0a8, base:0x5c646e, cam:10.8, tile:0.5, furn:FURN_OFFICE},
 };
 let SCENE="home";
@@ -1770,46 +1770,39 @@ const MODAL_TEXT={
 disc:`<h3>免責事項</h3>
 <ul>
 <li>本シミュレーターは<b>教育・防災啓発を目的とした簡易的な物理演算デモ</b>であり、実際の地震時における家具の挙動・建物応答・室内被害を正確に再現・予測するものではありません。</li>
-<li>結果は物理エンジンの数値計算条件（タイムステップ、接触剛性、摩擦モデル等）に依存し、同じ入力でも設定により大きく変わり得ます。<span class="warn">構造設計、耐震診断、家具固定の要否判断、安全性・危険性の評価、保険・法務等いかなる実務判断の根拠にも使用しないでください。</span></li>
+<li>結果は物理エンジンの数値計算条件（タイムステップ、接触剛性、摩擦モデル等）に依存し、同じ入力でも設定により大きく変わり得ます。<span class="warn">構造設計、家具固定の要否判断、安全性・危険性の評価、いかなる実務判断の根拠にも使用しないでください。</span></li>
 <li>シミュレーション結果および本ツールの利用・利用不能により生じたいかなる直接・間接の損害についても、作成者は一切の責任を負いません。</li>
-<li>K-NET / KiK-net（防災科学技術研究所）、気象庁等の強震記録を読み込む場合は、各機関が定めるデータ利用規約・出典表示条件に従ってください。記録データ自体は本ツールに含まれません。</li>
-<li>実際の地震への備え（家具固定・配置見直し・避難計画等）は、自治体・気象庁・専門機関の公式情報および専門家の助言に基づいて行ってください。</li>
+<li>K-NET / KiK-net（防災科学技術研究所）、気象庁等の強震記録を読み込む場合は、各機関が定めるデータ利用規約に必ず従ってください。観測波形データ自体は本ツールに含まれません。ダウンロードして読み込んでください。</li>
+<li>実際の地震への備え（家具固定・配置見直し）は、自治体・気象庁・消防庁等の公式情報および専門家の助言に基づいて行ってください。</li>
 </ul>
 <h3>物理モデルの限界・注意点</h3>
 <ul>
 <li><b>剛体近似</b>：家具は変形・破損しない剛体として扱い、引き出しの飛び出し、扉の開閉、収納物の散乱、ガラスの破損等は表現しません。</li>
-<li><b>摩擦モデル</b>：物理エンジンの反復ソルバーは完全な静止摩擦（固着）を表現できないため、床接触中の剛体にはクーロン摩擦の上限（μs·N、μs=1.3μk）を超えない範囲の摩擦撃力を補助的に与えています。上限内では台と同速に達し（静止摩擦の実挙動）、上限を超えると動摩擦（μk）での滑走に移行します。摩擦係数は代表値であり、実際の床材・脚形状・経年により大きく異なります。</li>
-<li><b>衝突・着地</b>：反発係数0の非弾性衝突を仮定しています。タイムステップ（240Hz）に依存する貫通補正により、強い鉛直加速度を受けた直後の着地で微小なジャンプが生じることがあります。接触剛性の軟化と接触グレース窓（数ステップ）でこの影響を低減していますが、完全には除去できません。</li>
-<li><b>吊り具</b>：紐は伸びない剛リンク（点対点拘束）で近似しており、紐のたわみ・切断は表現しません。天井は剛体として扱い、吊り具は天井に衝突して止まります。</li>
-<li><b>建物モデル</b>：等質量（1000t/階）・等剛性のせん断型多質点系という強い理想化を用いています。実建物の剛性分布・偏心・非線形（塑性化・損傷）・地盤との相互作用は考慮していません。応答は弾性範囲の目安です。</li>
-<li><b>波形処理</b>：加速度記録の積分（速度・変位）にはハイパスフィルタ等の処理を伴うため、長周期成分・永久変位は正確には復元されません。</li>
+<li><b>摩擦モデル</b>：物理エンジンの反復ソルバーは完全な静止摩擦（固着）を表現できないため、床接触中の剛体にはクーロン摩擦の上限（μs·N、μs=1.3μk）を超えない範囲の摩擦撃力を強制的に与えています。上限内では振動台と同速に達し、上限を超えると動摩擦（μk）での滑走状態（家具の移動）に移行します。摩擦係数は代表値であり、実際の床材・脚形状により大きく異なります。</li>
+<li><b>衝突・着地</b>：反発係数0の非弾性衝突を仮定しています。タイムステップ（240Hz）による壁貫通を防止するための補正により、強い鉛直加速度を受けた直後の着地で微小なジャンプが生じることがあります。接触剛性と接触グレース窓（数ステップ）でこの影響を低減していますが、完全には除去できません。</li>
+<li><b>吊り具</b>：紐は伸びない剛リンク（点対点拘束）で近似しており、紐のたわみは表現しません。天井は剛体として扱い、吊り具は天井に衝突して止まります。</li>
+<li><b>建物モデル</b>：等質量（1000t/階）・等剛性のせん断型多質点系を仮定しており、実建物の剛性分布・偏心・非線形な挙動（塑性変形・損傷）は考慮していません。</li>
 </ul>`,
 usage:`<h3>基本の流れ</h3>
 <ul>
-<li><b>① 波形の用意</b>：「波形ファイル」からK-NET/KiK-net ASCII形式または気象庁の加速度CSV（3成分）を読み込みます。ヘッダから観測点・発震時刻等を自動抽出し、加速度を積分して速度・変位波形を生成します。記録がない場合は「正弦波加振」で方向（NS/EW）・周期・最大変位・継続時間を指定して合成波を生成できます（両端2周期テーパ付き）。</li>
+<li><b>① 波形の用意</b>：「波形ファイル」からK-NET/KiK-net CSV形式または気象庁の加速度CSV（3成分）を読み込みます。ヘッダから観測点・発震時刻等を自動抽出し、加速度を積分して速度・変位波形を生成します。記録がない場合は「正弦波加振」で方向（NS/EW）・周期・最大変位・継続時間を指定して合成波を生成できます。</li>
 <li><b>② 室内空間</b>：「室内空間」で一般家庭（和室 4.2×4.2m）／オフィス（6.4×5.2m）を切替。家具・小物はチェックで個別に配置切替でき、質量と重心高（%）も変更可能です。重心を高くすると転倒しやすくなります。</li>
-<li><b>③ 建物応答（任意）</b>：「建物内の階で加振」をONにすると、多質点せん断モデルの時刻歴応答解析（Newmark-β法、Rayleigh減衰）で求めた指定階の床応答（絶対加速度・速度・変位）で部屋を加振します。構造種別（S造：T₁=0.03H・h=2% ／ RC造：T₁=0.02H・h=3%、階高4m）、階数（3〜50）、対象階を指定します。地表比のPA増幅率が表示されます。</li>
+<li><b>③ 建物応答</b>：「建物内の階で加振」をONにすると、多質点せん断モデルの時刻歴応答解析（Newmark-β法、Rayleigh減衰）で求めた指定階の床応答（絶対加速度・速度・変位）で部屋を加振します。構造種別（S造：T₁=0.03H・h=2% ／ RC造：T₁=0.02H・h=3%、階高4m）、階数（3〜50）、対象階を指定します。地表比のPA増幅率が表示されます。</li>
 <li><b>④ 加振</b>：「加振開始」で実行。再生速度（スロー〜等速）、振幅倍率、NS↔EW入替、開始時刻スキップを設定できます。「初期配置に戻す」で何度でもやり直せます。</li>
 </ul>
 <h3>画面の見方・操作</h3>
 <ul>
 <li><b>3D視点</b>：ドラッグで回転、ホイール（ピンチ）でズーム。</li>
 <li><b>波形パネル</b>（右上「波形」）：加速度・速度・変位の3成分波形と再生カーソル。右上のボタンで「全体表示 ⇄ 再生時刻±15秒の窓表示」を切替できます。縦軸は全記録の最大値で固定され、窓間で比較できます。</li>
-<li><b>変位軌跡</b>（右上「軌跡 NS-EW」）：水平面内の変位オービット。全軌跡（淡色）、直近2秒（橙）、現在位置（白点）を表示します。</li>
-<li><b>加速度HUD</b>（画面上部）：直近1秒間の最大合成加速度（gal）。振幅倍率を反映します。</li>
+<li><b>変位軌跡</b>（右上「軌跡 NS-EW」）：NS方向をY軸、EW方向をX軸として、変位の軌跡を示します。全軌跡（淡色）、直近2秒（橙）、現在位置（白点）を表示します。</li>
+<li><b>加速度HUD</b>（画面上部）：直近1秒間の3成分合成加速度の最大値（gal）。振幅倍率を反映します。</li>
 <li><b>状態パネル</b>：家具ごとの傾き・移動量・転倒/移動判定、吊り具の振れ角を表示します。</li>
 <li><b>操作パネル</b>：左上「パネル」ボタンで格納・展開できます。</li>
 </ul>
-<h3>観察のヒント</h3>
-<ul>
-<li>背が高く重心の高い家具（本棚・キャビネット）は短周期の強い揺れで転倒しやすくなります。</li>
-<li>キャスター付きの複合機・オフィスチェアは摩擦が小さく、弱い揺れでも大きく走行します。</li>
-<li>長周期（2〜6秒）・大変位の正弦波や、高層階の床応答を与えると、超高層ビルにおける長周期地震動の「ゆっくり大きい」揺れと家具の滑走が観察できます。</li>
-<li>振幅倍率・質量・重心高を変えて、同じ地震での挙動差を比べてみてください。</li>
 </ul>`,
 faq:`<h3>よくある質問</h3>
 <ul>
-<li><b>Q. 対応している波形形式は？</b><br>A. K-NET/KiK-net ASCII形式、および気象庁の加速度CSV（3成分）です。文字コードはShift_JIS/UTF-8を自動判別し、100Hz以外のサンプリングは内部で100Hzに再標本化します。1成分のみの記録には対応していません。</li>
+<li><b>Q. 対応している波形形式は？</b><br>A. K-NET/KiK-net CSV形式、および気象庁の加速度CSV（3成分）です。文字コードはShift_JIS/UTF-8を自動判別し、100Hz以外のサンプリングは内部で100Hzに再標本化します。1成分のみの記録には対応していません。</li>
 <li><b>Q. gal とは？ 震度との関係は？</b><br>A. 加速度の単位で 1 gal = 1 cm/s²、重力加速度は約980 galです。震度は加速度だけでなく周期・継続時間も加味した計測震度から求まるため、galと震度は一対一には対応しません。</li>
 <li><b>Q. 「転倒」「移動」はどう判定している？</b><br>A. 鉛直軸からの傾きが45°を超えると転倒、初期位置からの水平移動が5cmを超えると移動と表示します（一度判定されると保持されます）。</li>
 <li><b>Q. 家具が揺れの途中でピタッと止まるのはなぜ？</b><br>A. 静止摩擦の表現です。床との相対速度を消すのに必要な力積がクーロン摩擦の上限（μs·N）以下のときだけ固着し、超えると動摩擦で滑ります。慣性力が摩擦限界を往復するため「滑って→止まる」を繰り返します。</li>
@@ -1818,8 +1811,8 @@ faq:`<h3>よくある質問</h3>
 <li><b>Q. 吊り照明はどこまで振れる？</b><br>A. 天井を剛体として扱っており、大振幅時は吊り具が天井に衝突して止まります（天井を突き抜けての一回転は起きません）。紐は伸びない剛リンク近似です。</li>
 <li><b>Q. 家具が着地の瞬間に小さく跳ねることがある？</b><br>A. タイムステップ（240Hz）に依存した貫通補正の既知の副作用です。接触剛性の軟化と接触グレース窓で低減していますが、強い上下動では残ることがあります。</li>
 <li><b>Q. 動作が重い場合は？</b><br>A. 家具・小物のチェックを減らす、波形・軌跡パネルを閉じる、他のタブを閉じる、再生速度を下げる等を試してください。物理演算は240Hz固定のため、CPU性能の影響を受けます。</li>
-<li><b>Q. 記録データはどこで入手できる？</b><br>A. K-NET/KiK-netは防災科研の強震観測網サイト（要利用登録）、気象庁の強震波形は気象庁サイトで公開されています。入手したデータは各機関の利用規約に従ってください。</li>
-<li><b>Q. 結果を防災対策の判断に使ってよい？</b><br>A. いいえ。本ツールは挙動の傾向を体感するための教材です。家具固定の要否や安全性の判断は、専門機関の指針・専門家の助言に基づいてください。</li>
+<li><b>Q. 観測波形データはどこで入手できる？</b><br>A. K-NET/KiK-netは防災科研の強震観測網（https://www.kyoshin.bosai.go.jp/ja/）、気象庁波形は強震観測データ（https://www.data.jma.go.jp/eqev/data/kyoshin/jishin/index.html）で公開されています。各機関の利用規約に従って利用してください。</li>
+<li><b>Q. 結果を防災対策の判断に使ってよい？</b><br>A. いいえ。本ツールは地震による室内の挙動を体感するための教材です。家具固定の要否や安全性の判断は、専門機関の解説・専門家の助言等に基づいてください。</li>
 </ul>`};
 function showModal(tab){
   document.getElementById("modalBg").classList.add("show");
