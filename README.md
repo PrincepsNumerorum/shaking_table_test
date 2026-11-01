@@ -8,7 +8,7 @@
 
 SHAKE ROOM is a single-file, in-browser 3D simulator that drives a virtual room on a shake table with **real strong-motion records** and shows how furniture and small items slide, rock, overturn and fall.
 
-> ⚠️ This tool is for **education, research and disaster awareness** only. It must not be used to evaluate anti-tipping measures, design buildings or equipment, predict damage, or support legal, insurance or regulatory decisions. See [Disclaimer](#disclaimer).
+> ⚠️ This tool is for **education and disaster awareness** only. It must not be used to evaluate anti-tipping measures, design buildings or equipment, predict damage, or support legal, insurance or regulatory decisions. See [Disclaimer](#disclaimer).
 
 ### Features
 
@@ -31,8 +31,7 @@ SHAKE ROOM is a single-file, in-browser 3D simulator that drives a virtual room 
 - **Room presets**
   - Living room, bedroom, dining kitchen, office.
   - Japanese convenience store (about 240 individual goods).
-  - School classroom, hospital ward, operating room.
-  - Shopping street: block walls, vending machines, parked cars, bicycles, projecting signs.
+  - School classroom, hospital ward.
 - **Building mode**: the room is shaken by the estimated motion of any floor of an RC, steel or base-isolated building. The building response is a nonlinear shear-building model (bilinear hysteresis, Ai-distributed storey strength, Newmark method).
 - **Layout editing**
   - A 2D floor-plan editor: move, rotate, snap to a wall, add and delete items, and choose what sits on each piece.
@@ -98,7 +97,7 @@ This software is provided "as is", without warranty of any kind. The author acce
 
 SHAKE ROOM は、**実際の強震記録**で振動台上の部屋を揺らし、家具や小物の滑動・ロッキング・転倒・落下を3Dで表示するシミュレータです。HTMLファイル1つでブラウザ上だけで動きます。
 
-> ⚠️ 本ツールは**教育・研究・防災啓発**のためのものです。家具の転倒防止策の効果判定、建築物や設備の設計、被害予測、法令・保険・訴訟上の判断には使わないでください。詳しくは[免責事項](#disclaimer-ja)を参照してください。
+> ⚠️ 本ツールは**教育・防災啓発**のためのものです。家具の転倒防止策の効果判定、建築物や設備の設計、被害予測には使わないでください。詳しくは[免責事項](#disclaimer-ja)を参照してください。
 
 ### 主な機能
 
@@ -121,8 +120,7 @@ SHAKE ROOM は、**実際の強震記録**で振動台上の部屋を揺らし�
 - **室内プリセット**
   - リビング、寝室、ダイニングキッチン、オフィス。
   - コンビニ（商品約240点を個別に計算）。
-  - 学校の教室、病院の病室、手術室。
-  - 路上の商店街（ブロック塀、自動販売機、駐車車両、自転車、袖看板）。
+  - 学校の教室、病院の病室
 - **建物モード**：RC造・S造・免震RC造の任意の階の揺れを推定して加振します。建物の応答は弾塑性せん断型多質点モデル（バイリニア型、Ai分布の層せん断耐力、Newmark法）で計算します。
 - **配置の編集**
   - 平面図で、移動・回転・壁寄せ・追加・削除と、家具の上に載せる物の選択ができます。
